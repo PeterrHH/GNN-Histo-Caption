@@ -160,3 +160,9 @@ class GraphBuilding:
             len(images_path) - len(image_ids_failing)
         ))
 
+
+if __name__ == "__main__":
+    image_path = "../Report-nmi-wsi/Images"
+    GB = GraphBuilding()
+
+
