@@ -1,0 +1,5 @@
+dataset_path: "../../data/Images"
+caption_home_path: "../../data"
+histocartography_path: "../histocartography/histocartography"
+batch_size: 32
+phase: train
