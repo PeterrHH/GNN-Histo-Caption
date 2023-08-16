@@ -61,9 +61,8 @@ class DiagnosticDataset(Dataset):
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
             report_data = json.load(json_file)
-        captions = [report_data[key]['caption'] for key in new_file_names if key in report_data.keys()]
-        labels = [report_data[key]['label'] for key in new_file_names if key in report_data.keys()]
-        return captions, labels
+        self.captions = [report_data[key]['caption'] for key in new_file_names if key in report_data.keys()]
+        self.labels = [report_data[key]['label'] for key in new_file_names if key in report_data.keys()]
     
     def get_cell_graph(self):
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
@@ -98,12 +97,93 @@ class DiagnosticDataset(Dataset):
     
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 5 captions
-        if self.cg and self.tg:
-            return self.hg
-        pass
+
+        captions = self.captions[index]
+        labels = self.labels[index]
+        # 1. Hierarchical Graphs
+        if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
+            if self.load_in_ram:
+                cg = self.cell_graphs[index]
+                tg = self.tissue_graphs[index]
+                assign_mat = self.assign_matrices[index]
+
+                '''
+                Issue: How to check and guarantee that the cg and tg and matched with the assign_mat for the same index
+                '''
+            else:
+                cg, _ = load_graphs(self.list_cg_path[index])
+                cg = cg[0]
+                tg, _ = load_graphs(self.list_tg_path[index])
+                tg = tg[0]
+                assign_mat = h5_to_tensor(self.list_assign_path[index]).float().t()
+
+
+            cg = set_graph_on_cuda(cg) if IS_CUDA else cg
+            tg = set_graph_on_cuda(tg) if IS_CUDA else tg
+            assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
+
+            return cg,tg,assign_mat, captions, labels
+        
+        #   Use only tissue graph
+        elif hasattr(self,'num_tg'):
+            if self.load_in_ram:
+                tg = self.tissue_graphs[index]
+            else:
+                tg, _ = load_graphs(self.list_tg_path[index])
+                tg = tg[0]
+            tg = set_graph_on_cuda(tg) if IS_CUDA else tg
+            return tg, assign_mat, captions, labels
+            
+        #   Use only cell graph
+        else:
+            if self.load_in_ram:
+                cg = self.cell_graphs[index]
+            else:
+                cg, _ = load_graphs(self.list_cg_path[index])
+                cg = cg[0]
+            cg = set_graph_on_cuda(cg) if IS_CUDA else cg
+            return cg, assign_mat, captions, labels
     
     
     def __len__(self):
         assert len(self.cg) == len(self.tg)
         
         return len(self.cg)
+
+def collate(batch):
+    """
+    Collate a batch.
+    Args:
+        batch (torch.tensor): a batch of examples.
+    Returns:
+        data: (tuple)
+        labels: (torch.LongTensor)
+    """
+    def collate_fn(batch, id, type):
+        return COLLATE_FN[type]([example[id] for example in batch])
+
+    # collate the data
+    num_modalities = len(batch[0])  # should 2 if CG or TG processing or 4 if HACT
+    batch = tuple([collate_fn(batch, mod_id, type(batch[0][mod_id]).__name__)
+                  for mod_id in range(num_modalities)])
+
+    return batch
+
+def make_dataloader(
+        batch_size,
+        shuffle=True,
+        num_workers=0,
+        **kwargs
+    ):
+    """
+    Create a BRACS data loader.
+    """
+
+    dataset = DiagnosticDataset()
+    dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            collate_fn=collate
+        )
