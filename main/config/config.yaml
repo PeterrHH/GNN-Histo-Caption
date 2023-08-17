@@ -1,4 +1,6 @@
 dataset_path: "../../data"
 histocartography_path: "../histocartography/histocartography"
+graph_path: "graph"
 phase: train # train, test, eval
+batch_size: batch_size
 

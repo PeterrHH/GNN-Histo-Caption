@@ -9,7 +9,9 @@ import pandas as pd
 
 import tensorflow as tf
 import yaml
-
+import sys
+sys.path.append('../histocartography/histocartography')
+sys.path.append('../histocartography')
 
 from evaluation import Scorer
 from dataloader import make_dataloader
@@ -65,6 +67,10 @@ def update_argparser(args, config_file_path = "config/config.yaml"):
     
     if args.phase:
         config["phase"] = args.phase
+    if args.in_ram:
+        config["in_ram"] = True
+    else:
+        config["in_ram"] = False
     return config
 
 def argparser():
@@ -78,6 +84,11 @@ def argparser():
     parser.add_argument('--config_path',
         help = "path to the config path used",
         type = str)
+    parser.add_argument(
+        '--in_ram',
+        help='if the data should be stored in RAM.',
+        action='store_true',
+    )
     return parser
     # parser.add_argument('echo', help = 'echo the given string')
     # parser.add_argument('-n','--number',help = "number", type = int, default = 0, nargs = '?')
@@ -89,12 +100,61 @@ def argparser():
 def main():
     #   Get all the parser
     parser = argparser()
-    args = sparser.parse_args()
+    args = parser.parse_args()
+    print(args)
+    print("Parse")
     args = update_argparser(args)
+    print(args)
+
+    #   Set up wandb
+
+
+    #   set path to save checkpoints
+
     
-    make_dataloader(
-        # batch_size = args.batchsize,
-        # num_workers = 
+    #   make the dl here
+    train_dl = make_dataloader(
+        split = "train",
+        base_data_path = args.dataset_path,
+        graph_path = args.graph_path,
+        load_in_ram = args.in_ram,
+        batch_size=args.batch_size,
     )
 
+    test_dl = make_dataloader(
+        split = "test",
+        base_data_path = args.dataset_path,
+        graph_path = args.graph_path,
+        load_in_ram = args.in_ram,
+        batch_size=args.batch_size,
+    )
 
+    eval_dl = make_dataloader(
+        split = "eval",
+        base_data_path = args.dataset_path,
+        graph_path = args.graph_path,
+        load_in_ram = args.in_ram,
+        batch_size=args.batch_size,
+    )
+
+    if args.phase == "train":
+        #   Model training
+        pass
+    else:
+        #   Only run the Test set
+        wandb.init(
+        # set the wandb project where this run will be logged
+            project="GNN simplifcation and application in histopathology image captioning",
+
+            # track hyperparameters and run metadata
+            config={
+                "architecture": "GNN-LSTM",
+                "dataset": "Nmi-Wsi-Diagnosis",
+            }
+        )
+            
+
+
+
+if __name__ == "__main__":
+    main()

@@ -33,7 +33,7 @@ class DiagnosticDataset(Dataset):
             split: str = None,
             base_data_path: str = None,
             graph_path: str = None,
-            load_in_ram: bool = False,):
+            load_in_ram: bool = False):
         # load data
         super(DiagnosticDataset, self).__init__()
         self.graph_path = graph_path
@@ -133,7 +133,7 @@ class DiagnosticDataset(Dataset):
                 tg = tg[0]
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             return tg, assign_mat, captions, labels
-            
+
         #   Use only cell graph
         else:
             if self.load_in_ram:
@@ -168,18 +168,29 @@ def collate(batch):
                   for mod_id in range(num_modalities)])
 
     return batch
-
+            # split: str = None,
+            # base_data_path: str = None,
+            # graph_path: str = None,
+            # load_in_ram: bool = False
 def make_dataloader(
         batch_size,
+        split,
+        base_data_path,
+        graph_path,
+        load_in_ram,
         shuffle=True,
         num_workers=0,
-        **kwargs
     ):
     """
     Create a BRACS data loader.
     """
 
-    dataset = DiagnosticDataset()
+    dataset = DiagnosticDataset(
+                split = split,
+                base_data_path = base_data_path,
+                graph_path = graph_path,
+                load_in_ram = load_in_ram
+            )
     dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
