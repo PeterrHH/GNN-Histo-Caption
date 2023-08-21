@@ -22,8 +22,7 @@ with open("config/base.yaml", 'r') as config_file:
 
 # # Retrieve the value for the key "Place"
 # place_value = config_data.get("histocartography_path")
-sys.path.append('../histocartography/histocartography')
-sys.path.append('../histocartography')
+
 from preprocessing import (
     VahadaneStainNormalizer,         # stain normalizer
     NucleiExtractor,                 # nuclei detector 

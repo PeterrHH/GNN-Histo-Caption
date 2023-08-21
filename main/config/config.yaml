@@ -1,6 +1,16 @@
 dataset_path: "../../data"
 histocartography_path: "../histocartography/histocartography"
 graph_path: "graph"
+output_path: "output"
+learning_rate: 0.001
 phase: train # train, test, eval
 batch_size: batch_size
+epochs: 40
+
+gnn_param:
+  cell_layers: 2
+  tissue_layers: 2
+
+
+lstm_param:
 

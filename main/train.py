@@ -20,6 +20,9 @@ import wandb
 
 from argparse import ArgumentParser
 
+# from ml.models import CellGraphModel, TissueGraphModel
+from torch_geometric.nn.pool.diff_pool import DiffPool
+
 # parser = ArgumentParser()
 # parser.add_argument('echo', help = 'echo the given string')
 # parser.add_argument('-n','--number',help = "number", type = int, default = 0, nargs = '?')
@@ -71,33 +74,48 @@ def update_argparser(args, config_file_path = "config/config.yaml"):
         config["in_ram"] = True
     else:
         config["in_ram"] = False
+    if args.epochs:
+        config["epochs"] = args.epoch
     return config
 
+'''
+Parse Argument
+'''
 def argparser():
     parser = ArgumentParser()
+
     parser.add_argument(
         '--phase',
         help = "Enter either: train, test or eval, represent the stage of model",
         type = str,
         choices = ["train","test","eval"]
         )
+
     parser.add_argument('--config_path',
         help = "path to the config path used",
         type = str)
+
     parser.add_argument(
         '--in_ram',
         help='if the data should be stored in RAM.',
         action='store_true',
     )
-    return parser
-    # parser.add_argument('echo', help = 'echo the given string')
-    # parser.add_argument('-n','--number',help = "number", type = int, default = 0, nargs = '?')
-    # parser.add_argument('-v','--verbose',help = "Provide disc", action = "store_true") # if --verbose has value in command line, then, it is true, 
-    # parser.add_argument('-w','--weight',help = "Wegihts", type = int, choices = [0,1,2]) # 
 
-    # args = parser.parse_args()
+    parser.add_argument(
+        '--epochs', type=int, help='epochs.', required=False
+    )
+
+    parser.add_argument(
+        '-lr','--learning_rate', type = float, help = "set learning rate"
+    )
+
+    return parser
 
 def main():
+    device = torch.device("cuda" if torch.cuda.is_avaliable() else "cpu")
+    load_model = False
+    save_model = True
+
     #   Get all the parser
     parser = argparser()
     args = parser.parse_args()
@@ -105,9 +123,6 @@ def main():
     print("Parse")
     args = update_argparser(args)
     print(args)
-
-    #   Set up wandb
-
 
     #   set path to save checkpoints
 
@@ -136,23 +151,30 @@ def main():
         load_in_ram = args.in_ram,
         batch_size=args.batch_size,
     )
-
+    
+    MAX_LENGTH = 100
     if args.phase == "train":
         #   Model training
-        pass
-    else:
-        #   Only run the Test set
-        wandb.init(
-        # set the wandb project where this run will be logged
-            project="GNN simplifcation and application in histopathology image captioning",
 
-            # track hyperparameters and run metadata
+        #   set the wandb project where this run will be logged
+        wandb.init(
+            project="GNN simplifcation and application in histopathology image captioning",
+            #   track hyperparameters and run metadata
             config={
                 "architecture": "GNN-LSTM",
                 "dataset": "Nmi-Wsi-Diagnosis",
+                "epoch": args.epochs    
             }
         )
-            
+        with torch.no_grad():
+            x = self.encoderGNN(image).unsqueeze(0)
+            states = None
+
+            for _ in max_length:
+
+    else:
+        #   Only run the Test set
+        print("test")
 
 
 
