@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 
 import tensorflow as tf
 import yaml
@@ -19,9 +20,8 @@ from dataloader import make_dataloader
 import wandb
 
 from argparse import ArgumentParser
-
-# from ml.models import CellGraphModel, TissueGraphModel
-from torch_geometric.nn.pool.diff_pool import DiffPool
+from models.Graph_Model import GNNEncoder
+from models.LSTM import LSTMDecoder
 
 # parser = ArgumentParser()
 # parser.add_argument('echo', help = 'echo the given string')
@@ -112,7 +112,7 @@ def argparser():
     return parser
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_avaliable() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_model = False
     save_model = True
 
@@ -123,8 +123,12 @@ def main():
     print("Parse")
     args = update_argparser(args)
     print(args)
-
+    learning_rate = args["learning_rate"]
+    gnn_param = args["gnn_param"]
+    lstm_param = args["lstm_param"]
     #   set path to save checkpoints
+
+
 
     
     #   make the dl here
@@ -151,6 +155,21 @@ def main():
         load_in_ram = args.in_ram,
         batch_size=args.batch_size,
     )
+    #   Define Model, Loss and 
+    Encoder = GNNEncoder(
+        input_feat = 514,   #   Input feature size for each node
+        cell_layers = gnn_param["cell_layers"],
+        tissue_layer = gnn_param["tissue_layers"],
+        cell_conv_method = gnn_param["cell_conv_method"],
+        tissue_conv_method = gnn_param["tissue_conv_method"],
+        pool_method = gnn_param["pool_method"],
+    )
+
+    Decoder = LSTMDecoder(
+        dropout = lstm_param["dropout"]
+    )
+    optimizer = nn.CrossEntropyLoss().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr= learning_rate)
     
     MAX_LENGTH = 100
     if args.phase == "train":

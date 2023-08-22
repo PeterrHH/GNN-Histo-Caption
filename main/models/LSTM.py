@@ -2,10 +2,11 @@ from torch.nn import LSTM
 import torch.nn as nn
 
 
-class LSTMDecode(nn.Module):
-    def __init__(self,dropout_rate = 0.5):
+class LSTMDecoder(nn.Module):
+    def __init__(self,dropout = 0.5):
         super().__init__()
-        self.dropout_rate = dropout_rate
+        assert dropout <= 1
+        self.dropout_rate = dropout
         self.embed = nn.Embedding(vocab_size, embed_size)
         self.dropout = nn.Dropout(p = self.dropout)
         self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True) # tensor shape (batch, seq, feature)  when batch_first = True

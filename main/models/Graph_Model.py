@@ -14,7 +14,7 @@ from torch_geometric.nn import dense_diff_pool, dense_mincut_pool
 import torch
 import torch.nn as nn
 
-class GNNEcoder(nn.Module):
+class GNNEncoder(nn.Module):
     def __init__(self, input_feat, cell_conv_method, tissue_conv_method, pool_method, num_layers, outpu_size = 256):
         super().__init__()
         self.conv_map = {
@@ -66,17 +66,23 @@ class GNNEcoder(nn.Module):
             self.batch_norms.append(BatchNorm(dim))
             self.pooling.append(self.selected_pool_method(dim))
 
-    def compute_assigned_feats(self, cg,assignment,tg):
+    def compute_assigned_feats(self, cg_feat,assignment_mat,tg_feat):
         """
         Use the assignment matrix to agg the feats
         Retur the tissue graph feature
         """
-`       #   Find what cells belong to each tissue
+        #   Find what cells belong to each tissue
 
         #   Operationt to concet all cells belong to same tissue with some aggregation function
         
         #   Concat aggregation result with tissue feature
-        return torch.cat(ll_h_concat, dim=0)
+        column_numbers = np.argmax(assignment_mat, axis=1)
+        summed_features = torch.zeros(tg_feat.shape)  #    summed_feature should have shape (num_tissue, feature size)
+        #   Use torch.scatter_add to accumulate features based on class labels
+        summed_features = torch.scatter_add(summed_features, dim=0, index=torch.from_numpy(column_numbers).unsqueeze(1), src=cg_feat)
+        #   Add feature to cell_feature
+        sum_tissue_feat = summed_features + tg_feat
+        return sum_tissue_feat
 
     def readout(self,tg):
         '''
@@ -100,12 +106,7 @@ class GNNEcoder(nn.Module):
         '''
         assignment_mat have shape (num_graph, num_cell_node_each_graph, num_tissue_node_each_graph)
         '''
-        column_numbers = np.argmax(assignment_mat, axis=1)
-        summed_features = torch.zeros(tg_feat.shape)  #    summed_feature should have shape (num_tissue, feature size)
-        #   Use torch.scatter_add to accumulate features based on class labels
-        summed_features = torch.scatter_add(summed_features, dim=0, index=torch.from_numpy(column_numbers).unsqueeze(1), src=cg_feat)
-        #   Add feature to cell_feature
-        sum_tissue_feat = summed_features + tg_feat
+        sum_tissue_feat = self.compute_assigned_feats(cg_feat,assignment_mat,tg_feat)
 
         #   Propogate Tissue Graph
         for i in range(self.num_layers):

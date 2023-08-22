@@ -10,7 +10,11 @@ epochs: 40
 gnn_param:
   cell_layers: 2
   tissue_layers: 2
+  cell_conv_method: "GIN" # GCN, GAT, GraphSage, GIN, PNA
+  tissue_conv_method: "GIN" # GCN, GAT, GraphSage, GIN, PNA
+  pool_method: None # None, Diff, MinCut
 
 
 lstm_param:
+  dropout: 0.5
 
