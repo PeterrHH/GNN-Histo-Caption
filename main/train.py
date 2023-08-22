@@ -133,27 +133,33 @@ def main():
     
     #   make the dl here
     train_dl = make_dataloader(
+        batch_size = 2,
         split = "train",
-        base_data_path = args.dataset_path,
-        graph_path = args.graph_path,
-        load_in_ram = args.in_ram,
-        batch_size=args.batch_size,
+        base_data_path = "../../Report-nmi-wsi",
+        graph_path = "graph",
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
     )
 
     test_dl = make_dataloader(
+        batch_size = 2,
         split = "test",
-        base_data_path = args.dataset_path,
-        graph_path = args.graph_path,
-        load_in_ram = args.in_ram,
-        batch_size=args.batch_size,
+        base_data_path = "../../Report-nmi-wsi",
+        graph_path = "graph",
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
     )
 
     eval_dl = make_dataloader(
-        split = "eval",
-        base_data_path = args.dataset_path,
-        graph_path = args.graph_path,
-        load_in_ram = args.in_ram,
-        batch_size=args.batch_size,
+        batch_size = 2,
+        split = "test",
+        base_data_path = "../../Report-nmi-wsi",
+        graph_path = "graph",
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
     )
     #   Define Model, Loss and 
     Encoder = GNNEncoder(

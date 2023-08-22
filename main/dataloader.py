@@ -68,13 +68,14 @@ class DiagnosticDataset(Dataset):
     - List of image name
     - Split: train, test, eval
     '''
-    def get_captions_labels(self,list_name, split):
+    def get_captions_labels(self,img_path, split):
+        list_name = glob(img_path+"/*.png")
         image_names = [os.path.splitext(os.path.split(i)[-1])[0]  for i in list_name]
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
             report_data = json.load(json_file)
-        self.captions = [report_data[key]['caption'] for key in new_file_names if key in report_data.keys()]
-        self.labels = [report_data[key]['label'] for key in new_file_names if key in report_data.keys()]
+        self.captions = [report_data[key]['caption'] for key in image_names if key in report_data.keys()]
+        self.labels = [report_data[key]['label'] for key in image_names if key in report_data.keys()]
     
     def get_cell_graph(self):
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
@@ -118,8 +119,8 @@ class DiagnosticDataset(Dataset):
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
             if self.load_in_ram:
-                cg = self.cell_graphs[index]
-                tg = self.tissue_graphs[index]
+                cg = self.cg[index]
+                tg = self.tg[index]
                 assign_mat = self.assign_matrices[index]
 
                 '''
@@ -161,8 +162,6 @@ class DiagnosticDataset(Dataset):
     
     
     def __len__(self):
-        print(f"CG LENGTH {len(self.cg)} and num is {self.num_cg}-------")
-        print(f"TG LENGTH {len(self.tg)} and num is {self.num_tg}-------")
         assert len(self.cg) == len(self.tg)
         
         return len(self.cg)
@@ -171,24 +170,19 @@ def collate(batch):
     """
     Collate a batch.
     Args:
-        batch (torch.tensor): a batch of examples.
+        batch (list): a batch of examples.
     Returns:
-        data: (tuple)
-        labels: (torch.LongTensor)
+        data: (tuple of DGLGraph)
     """
-    def collate_fn(batch, id, type):
-        return COLLATE_FN[type]([example[id] for example in batch])
+    def collate_fn(batch, id):
+        return [example[id] for example in batch]
 
-    # collate the data
+    # Collate the data
     num_modalities = len(batch[0])  # should 2 if CG or TG processing or 4 if HACT
-    batch = tuple([collate_fn(batch, mod_id, type(batch[0][mod_id]).__name__)
-                  for mod_id in range(num_modalities)])
+    batch_collated = tuple([collate_fn(batch, mod_id) for mod_id in range(num_modalities)])
 
-    return batch
-            # split: str = None,
-            # base_data_path: str = None,
-            # graph_path: str = None,
-            # load_in_ram: bool = False
+    return batch_collated
+
 def make_dataloader(
         batch_size,
         split,
