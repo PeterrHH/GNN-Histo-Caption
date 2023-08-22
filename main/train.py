@@ -186,10 +186,12 @@ def main():
             }
         )
         with torch.no_grad():
-            x = self.encoderGNN(image).unsqueeze(0)
-            states = None
-
-            for _ in max_length:
+            for batched_graph, captions in train_dataloader:
+                pred = model(batched_graph, batched_graph.ndata['attr'].float())
+                loss = F.cross_entropy(pred, labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
     else:
         #   Only run the Test set

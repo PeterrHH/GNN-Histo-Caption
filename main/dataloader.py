@@ -7,9 +7,13 @@ from dgl.data.utils import load_graphs
 from torch.utils.data import Dataset
 from glob import glob 
 import dgl 
+import json
+import sys
+sys.path.append('../histocartography/histocartography')
+sys.path.append('../histocartography')
 
+from utils import set_graph_on_cuda
 
-from histocartography.utils import set_graph_on_cuda
 
 
 IS_CUDA = torch.cuda.is_available()
@@ -33,30 +37,38 @@ class DiagnosticDataset(Dataset):
             split: str = None,
             base_data_path: str = None,
             graph_path: str = None,
-            load_in_ram: bool = False):
+            load_in_ram: bool = False,
+            ):
         # load data
         super(DiagnosticDataset, self).__init__()
         self.graph_path = graph_path
         self.split = split # Train Test Eval
+        self.base_data_path = base_data_path
+        self.load_in_ram = load_in_ram
         self.cg_path = os.path.join(self.graph_path,"cell_graphs",self.split)
-        self.tg_path = os.path.join(self.graph_path,"tissue_graph",self.split)
+        self.tg_path = os.path.join(self.graph_path,"tissue_graphs",self.split)
         self.assign_mat_path = os.path.join(self.graph_path,"assignment_mat",self.split)
         self.img_path = os.path.join(self.base_data_path,"Images", self.split)
-        self.report_file_name = split+"_annoation.json"
-        self.report_path = os.path.join(self.base_data_path,report_file_name)
+        self.report_file_name = split+"_annotation.json"
+        self.report_path = os.path.join(self.base_data_path,self.report_file_name)
 
         # Get list of cell graph
         self.cg = self.get_cell_graph()
         # Get list of tissue graph
         self.tg = self.get_tissue_graph()
 
-        self.assign_mat = self.get__assign_mat()
+        self.assign_mat = self.get_assign_mat()
+
+        self.get_captions_labels(self.img_path,self.split)
         
 
     '''
     Get the captions and the labels
+    Input:
+    - List of image name
+    - Split: train, test, eval
     '''
-    def get_captions_labels(list_name, split):
+    def get_captions_labels(self,list_name, split):
         image_names = [os.path.splitext(os.path.split(i)[-1])[0]  for i in list_name]
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
@@ -68,19 +80,22 @@ class DiagnosticDataset(Dataset):
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
         self.list_cg_path.sort()
         self.num_cg = len(self.list_cg_path)
-
+        cell_graphs = None
         if self.load_in_ram:
             cell_graphs = [load_graphs(single_cg_path) for single_cg_path in self.list_cg_path]
-            self.cell_graphs = [entry[0][0] for entry in cell_graphs]
+            cell_graphs = [entry[0][0] for entry in cell_graphs]
+        print(cell_graphs)
+        return cell_graphs
     
     def get_tissue_graph(self):
         self.list_tg_path = glob(os.path.join(self.tg_path, '*.bin'))
         self.list_tg_path.sort()
         self.num_tg = len(self.list_tg_path)
-
+        tissue_graphs = None
         if self.load_in_ram:
             tissue_graphs = [load_graphs(single_tg_path) for single_tg_path in self.list_tg_path]
-            self.tissue_graphs = [entry[0][0] for entry in tissue_graphs]
+            tissue_graphs = [entry[0][0] for entry in tissue_graphs]
+        return tissue_graphs
 
     def get_assign_mat(self):
         """
@@ -146,6 +161,8 @@ class DiagnosticDataset(Dataset):
     
     
     def __len__(self):
+        print(f"CG LENGTH {len(self.cg)} and num is {self.num_cg}-------")
+        print(f"TG LENGTH {len(self.tg)} and num is {self.num_tg}-------")
         assert len(self.cg) == len(self.tg)
         
         return len(self.cg)
@@ -177,7 +194,7 @@ def make_dataloader(
         split,
         base_data_path,
         graph_path,
-        load_in_ram,
+        load_in_ram = False,
         shuffle=True,
         num_workers=0,
     ):
@@ -198,3 +215,16 @@ def make_dataloader(
             num_workers=num_workers,
             collate_fn=collate
         )
+    return dataloader
+
+if __name__ == "__main__":
+    loader = make_dataloader(
+        batch_size = 2,
+        split = "test",
+        base_data_path = "../../Report-nmi-wsi",
+        graph_path = "graph",
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
+    )
+    print(next(iter(loader)))

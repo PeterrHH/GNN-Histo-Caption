@@ -1,4 +1,4 @@
-dataset_path: "../../data"
+dataset_path: "../../Report-nmi-wsi"
 histocartography_path: "../histocartography/histocartography"
 graph_path: "graph"
 output_path: "output"
