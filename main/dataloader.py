@@ -9,10 +9,13 @@ from glob import glob
 import dgl 
 import json
 import sys
+import nltk
+import pickle
 sys.path.append('../histocartography/histocartography')
 sys.path.append('../histocartography')
 
 from utils import set_graph_on_cuda
+from Vocabulary import Vocabulary
 
 
 
@@ -37,6 +40,7 @@ class DiagnosticDataset(Dataset):
             split: str = None,
             base_data_path: str = None,
             graph_path: str = None,
+            vocab_path: str = None,
             load_in_ram: bool = False,
             ):
         # load data
@@ -45,12 +49,17 @@ class DiagnosticDataset(Dataset):
         self.split = split # Train Test Eval
         self.base_data_path = base_data_path
         self.load_in_ram = load_in_ram
+        self.vocab_path = vocab_path
         self.cg_path = os.path.join(self.graph_path,"cell_graphs",self.split)
         self.tg_path = os.path.join(self.graph_path,"tissue_graphs",self.split)
         self.assign_mat_path = os.path.join(self.graph_path,"assignment_mat",self.split)
         self.img_path = os.path.join(self.base_data_path,"Images", self.split)
         self.report_file_name = split+"_annotation.json"
         self.report_path = os.path.join(self.base_data_path,self.report_file_name)
+        self.vocab = pickle.load(open(self.vocab_path,'rb'))
+        self.END_TOKEN = self.vocab.word2idx['<end>']
+        self.PAD_TOKEN = self.vocab.word2idx['<pad>'] # PAD_TOKEN is used for not supervison
+        self.vocab_size = len(self.vocab.word2idx)
 
         # Get list of cell graph
         self.cg = self.get_cell_graph()
@@ -60,8 +69,14 @@ class DiagnosticDataset(Dataset):
         self.assign_mat = self.get_assign_mat()
 
         self.get_captions_labels(self.img_path,self.split)
+    
+    def graph_to_caption_mapping():
+        self.graph_list = []
+        if hasattr(self, 'num_tg'):
+            self.graph_list = self.list_tg_path
+        else:
+             self.graph_list = self.list_cg_path
         
-
     '''
     Get the captions and the labels
     Input:
@@ -71,12 +86,15 @@ class DiagnosticDataset(Dataset):
     def get_captions_labels(self,img_path, split):
         list_name = glob(img_path+"/*.png")
         image_names = [os.path.splitext(os.path.split(i)[-1])[0]  for i in list_name]
+        print(f"IMAGE_NAMES {len(image_names)}")
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
             report_data = json.load(json_file)
-        self.captions = [report_data[key]['caption'] for key in image_names if key in report_data.keys()]
-        self.labels = [report_data[key]['label'] for key in image_names if key in report_data.keys()]
-    
+        sorted_report = {key: report_data[key] for key in sorted(report_data)}
+        self.captions = [sorted_report[key]['caption'] for key in image_names if key in sorted_report.keys()]
+        self.labels = [sorted_report[key]['label'] for key in image_names if key in sorted_report.keys()]
+
+            
     def get_cell_graph(self):
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
         self.list_cg_path.sort()
@@ -112,33 +130,52 @@ class DiagnosticDataset(Dataset):
             ]
     
     def __getitem__(self,index):
-        # return the cell graph, tissue graph, assignment matrix and the relevant 5 captions
+        # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
+        cap_id_in_img = index % 5
+        graph_id = int(index / 5)
+        print(f"    At index {index}, grpah_id is {graph_id} Size of Captions {len(self.captions)}")
+        caption = self.captions[graph_id][cap_id_in_img]
+        label = self.labels[graph_id]
 
-        captions = self.captions[index]
-        labels = self.labels[index]
+        #   Process cations and labels
+        sentences = caption.rstrip('.').replace(',','').split('. ')
+        caption_tokens = [] # convert to tokens for all num_feature sentences
+        paragraph = []
+        for s, sentence in enumerate(sentences):
+            # if feature (except conclusion) is insufficient information, do not output it
+            # but the conclusion (last one) is insufficient information, we still output it
+            if 'insufficient' in sentence and s < (len(sentences)-1): 
+                continue
+            tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
+            paragraph.append(str(sentence))
+            #tokens.append('<end>') # add stop indictor
+            tmp = [self.vocab(token) for token in tokens]
+            caption_tokens.extend(tmp)
+        caption_tokens.append(self.vocab('<end>'))
+
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
             if self.load_in_ram:
-                cg = self.cg[index]
-                tg = self.tg[index]
-                assign_mat = self.assign_matrices[index]
+                cg = self.cg[graph_id]
+                tg = self.tg[graph_id]
+                assign_mat = self.assign_matrices[graph_id]
 
                 '''
                 Issue: How to check and guarantee that the cg and tg and matched with the assign_mat for the same index
                 '''
             else:
-                cg, _ = load_graphs(self.list_cg_path[index])
+                cg, _ = load_graphs(self.list_cg_path[graph_id])
                 cg = cg[0]
-                tg, _ = load_graphs(self.list_tg_path[index])
+                tg, _ = load_graphs(self.list_tg_path[graph_id])
                 tg = tg[0]
-                assign_mat = h5_to_tensor(self.list_assign_path[index]).float().t()
+                assign_mat = h5_to_tensor(self.list_assign_path[graph_id]).float().t()
 
 
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
 
-            return cg,tg,assign_mat, captions, labels
+            return cg,tg,assign_mat, caption_tokens, label
         
         #   Use only tissue graph
         elif hasattr(self,'num_tg'):
@@ -148,23 +185,23 @@ class DiagnosticDataset(Dataset):
                 tg, _ = load_graphs(self.list_tg_path[index])
                 tg = tg[0]
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
-            return tg, assign_mat, captions, labels
+            return tg, assign_mat, caption_tokens, label
 
         #   Use only cell graph
         else:
             if self.load_in_ram:
                 cg = self.cell_graphs[index]
             else:
-                cg, _ = load_graphs(self.list_cg_path[index])
+                cg, _ = load_graphs(self.list_cg_path[graph_id])
                 cg = cg[0]
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
-            return cg, assign_mat, captions, labels
+            return cg, assign_mat, caption_tokens, label
     
     
     def __len__(self):
         assert len(self.cg) == len(self.tg)
         
-        return len(self.cg)
+        return len(self.cg)*5
 
 def collate(batch):
     """
@@ -188,6 +225,7 @@ def make_dataloader(
         split,
         base_data_path,
         graph_path,
+        vocab_path,
         load_in_ram = False,
         shuffle=True,
         num_workers=0,
@@ -200,6 +238,7 @@ def make_dataloader(
                 split = split,
                 base_data_path = base_data_path,
                 graph_path = graph_path,
+                vocab_path = vocab_path,
                 load_in_ram = load_in_ram
             )
     dataloader = torch.utils.data.DataLoader(
@@ -213,12 +252,31 @@ def make_dataloader(
 
 if __name__ == "__main__":
     loader = make_dataloader(
-        batch_size = 2,
+        batch_size = 4,
         split = "test",
         base_data_path = "../../Report-nmi-wsi",
         graph_path = "graph",
+        vocab_path = "../../Report-nmi-wsi/vocab_bladderreport.pkl",
         shuffle=True,
         num_workers=0,
         load_in_ram = True
     )
-    print(next(iter(loader)))
+    a = next(iter(loader))
+    total_batches = len(loader)
+    print(f"Total batches: {total_batches}")
+    for batch_idx, batch_data in enumerate(loader):
+        # Your batch processing code here
+        print(f"At each batch index {batch_idx}")  
+
+    print(f"Number of batches iterated: {batch_idx + 1}")
+    # print("START PRINT CONTENT")
+    # print(a[0])
+    # print("---------------------")
+    # print(a[1])
+    # print("---------------------")
+    # print(a[2])
+    # print("---------------------")
+    # print(a[3])
+    # print("-------------------")
+    # print(a[4])
+    print(len(loader.dataset.vocab))

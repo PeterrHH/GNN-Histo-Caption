@@ -112,7 +112,7 @@ def argparser():
     return parser
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_model = False
     save_model = True
 
@@ -132,37 +132,41 @@ def main():
 
     
     #   make the dl here
-    train_dl = make_dataloader(
+    dataloader = make_dataloader(
         batch_size = 2,
         split = "train",
-        base_data_path = "../../Report-nmi-wsi",
-        graph_path = "graph",
+        base_data_path = args["dataset_path"],
+        graph_path = args["graph_path"],
+        vocab_path = args["vocab_path"]
         shuffle=True,
         num_workers=0,
         load_in_ram = True
     )
 
-    test_dl = make_dataloader(
-        batch_size = 2,
-        split = "test",
-        base_data_path = "../../Report-nmi-wsi",
-        graph_path = "graph",
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True
-    )
+    # test_dl = make_dataloader(
+    #     batch_size = 2,
+    #     split = "test",
+    #     base_data_path = args["dataset_path"],
+    #     graph_path = args["graph_path"],
+    #     vocab_path = args["vocab_path"]
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True
+    # )
 
-    eval_dl = make_dataloader(
-        batch_size = 2,
-        split = "test",
-        base_data_path = "../../Report-nmi-wsi",
-        graph_path = "graph",
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True
-    )
+    # eval_dl = make_dataloader(
+    #     batch_size = 2,
+    #     split = "test",
+    #     base_data_path = args["dataset_path"],
+    #     graph_path = args["graph_path"],
+    #     vocab_path = args["vocab_path"]
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True
+    # )
     #   Define Model, Loss and 
-    Encoder = GNNEncoder(
+    vocab_size = len(dataloader.dataset.vocab)
+    encoder = GNNEncoder(
         input_feat = 514,   #   Input feature size for each node
         cell_layers = gnn_param["cell_layers"],
         tissue_layer = gnn_param["tissue_layers"],
@@ -171,10 +175,13 @@ def main():
         pool_method = gnn_param["pool_method"],
     )
 
-    Decoder = LSTMDecoder(
-        dropout = lstm_param["dropout"]
+    decoder = LSTMDecoder(
+        dropout = lstm_param["dropout"],
+        vocab_size = vocab_size
     )
-    optimizer = nn.CrossEntropyLoss().to(device)
+    encoder.to(DEVICE)
+    decoder.to(DEVICE)  
+    loss = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr= learning_rate)
     
     MAX_LENGTH = 100
@@ -188,16 +195,26 @@ def main():
             config={
                 "architecture": "GNN-LSTM",
                 "dataset": "Nmi-Wsi-Diagnosis",
-                "epoch": args.epochs    
+                "epoch": args["epochs"]
             }
         )
-        with torch.no_grad():
-            for batched_graph, captions in train_dataloader:
-                pred = model(batched_graph, batched_graph.ndata['attr'].float())
+        for epoch in range(args["epochs"]):
+            total_loss = 0.0
+            for batched_idx, batch_data in train_dataloader:
+                if args["graph_model_type"] == "Hierarchical":
+                    cg, tg, assign_mat, caption_tokens, labels = batch_data
+                    cg = cg.to(DEVICE)
+                    tg = tg.to(DEVICE)
+                    assign_mat = assign_mat.to(DEVICE)
+                    caption_tokens = caption_tokens.to(DEVICE)
+                optimizer.zero_grad()
+                model
                 loss = F.cross_entropy(pred, labels)
+                total_loss += loss
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
 
     else:
         #   Only run the Test set
