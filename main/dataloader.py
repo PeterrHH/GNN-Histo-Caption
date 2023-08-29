@@ -11,6 +11,8 @@ import json
 import sys
 import nltk
 import pickle
+import torch
+import torch.nn as nn
 sys.path.append('../histocartography/histocartography')
 sys.path.append('../histocartography')
 
@@ -57,8 +59,10 @@ class DiagnosticDataset(Dataset):
         self.report_file_name = split+"_annotation.json"
         self.report_path = os.path.join(self.base_data_path,self.report_file_name)
         self.vocab = pickle.load(open(self.vocab_path,'rb'))
+        # self.START_TOKEN = self.vocab.word2idx['<start>']
         self.END_TOKEN = self.vocab.word2idx['<end>']
         self.PAD_TOKEN = self.vocab.word2idx['<pad>'] # PAD_TOKEN is used for not supervison
+        self.max_length = 50
         self.vocab_size = len(self.vocab.word2idx)
 
         # Get list of cell graph
@@ -86,7 +90,7 @@ class DiagnosticDataset(Dataset):
     def get_captions_labels(self,img_path, split):
         list_name = glob(img_path+"/*.png")
         image_names = [os.path.splitext(os.path.split(i)[-1])[0]  for i in list_name]
-        print(f"IMAGE_NAMES {len(image_names)}")
+       
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
             report_data = json.load(json_file)
@@ -103,7 +107,6 @@ class DiagnosticDataset(Dataset):
         if self.load_in_ram:
             cell_graphs = [load_graphs(single_cg_path) for single_cg_path in self.list_cg_path]
             cell_graphs = [entry[0][0] for entry in cell_graphs]
-        print(cell_graphs)
         return cell_graphs
     
     def get_tissue_graph(self):
@@ -125,7 +128,7 @@ class DiagnosticDataset(Dataset):
         self.num_assign_mat = len(self.list_assign_path)
         if self.load_in_ram:
             self.assign_matrices = [
-                h5_to_tensor(single_assign_path).float().t()
+                h5_to_tensor(single_assign_path).float()
                     for single_assign_path in self.list_assign_path
             ]
     
@@ -133,24 +136,26 @@ class DiagnosticDataset(Dataset):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
         cap_id_in_img = index % 5
         graph_id = int(index / 5)
-        print(f"    At index {index}, grpah_id is {graph_id} Size of Captions {len(self.captions)}")
+        #   print(f"At index {index}, grpah_id is {graph_id} Size of Captions {len(self.captions)}")
         caption = self.captions[graph_id][cap_id_in_img]
         label = self.labels[graph_id]
-
         #   Process cations and labels
         sentences = caption.rstrip('.').replace(',','').split('. ')
         caption_tokens = [] # convert to tokens for all num_feature sentences
-        paragraph = []
         for s, sentence in enumerate(sentences):
-            # if feature (except conclusion) is insufficient information, do not output it
-            # but the conclusion (last one) is insufficient information, we still output it
+            #   if feature (except conclusion) is insufficient information, do not output it
+            #   but the conclusion (last one) is insufficient information, we still output it
             if 'insufficient' in sentence and s < (len(sentences)-1): 
                 continue
             tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
-            paragraph.append(str(sentence))
-            #tokens.append('<end>') # add stop indictor
+            #   tokens.append('<end>') # add stop indictor
             tmp = [self.vocab(token) for token in tokens]
             caption_tokens.extend(tmp)
+        #   Add Padding if necessary
+        if len(caption_tokens) < self.max_length:
+            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
+            caption_tokens = caption_tokens + padding
+        
         caption_tokens.append(self.vocab('<end>'))
 
         # 1. Hierarchical Graphs
@@ -168,14 +173,14 @@ class DiagnosticDataset(Dataset):
                 cg = cg[0]
                 tg, _ = load_graphs(self.list_tg_path[graph_id])
                 tg = tg[0]
-                assign_mat = h5_to_tensor(self.list_assign_path[graph_id]).float().t()
+                assign_mat = h5_to_tensor(self.list_assign_path[graph_id]).float()
 
 
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
 
-            return cg,tg,assign_mat, caption_tokens, label
+            return cg,tg,assign_mat, torch.tensor(caption_tokens).long(), label
         
         #   Use only tissue graph
         elif hasattr(self,'num_tg'):
@@ -185,7 +190,7 @@ class DiagnosticDataset(Dataset):
                 tg, _ = load_graphs(self.list_tg_path[index])
                 tg = tg[0]
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
-            return tg, assign_mat, caption_tokens, label
+            return tg, assign_mat, torch.tensor(caption_tokens).long(), label
 
         #   Use only cell graph
         else:
@@ -195,7 +200,7 @@ class DiagnosticDataset(Dataset):
                 cg, _ = load_graphs(self.list_cg_path[graph_id])
                 cg = cg[0]
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
-            return cg, assign_mat, caption_tokens, label
+            return cg, assign_mat, torch.tensor(caption_tokens).long(), label
     
     
     def __len__(self):
@@ -216,8 +221,15 @@ def collate(batch):
 
     # Collate the data
     num_modalities = len(batch[0])  # should 2 if CG or TG processing or 4 if HACT
-    batch_collated = tuple([collate_fn(batch, mod_id) for mod_id in range(num_modalities)])
-
+    batch_collated = [collate_fn(batch, mod_id) for mod_id in range(num_modalities)]
+    #print(f"----------Collated_batch-----------")
+    #print(batch_collated[-2])
+    #batch_collated[-2] = torch.stack(batch_collated[-2])    #   Stack the captions
+    batch_collated[0] = dgl.batch(batch_collated[0])
+    if len(batch_collated) == 5:
+        batch_collated[1] = dgl.batch(batch_collated[1])
+    batch_collated[-2] = torch.stack(batch_collated[-2])
+    batch_collated[-1] = torch.tensor(batch_collated[-1])
     return batch_collated
 
 def make_dataloader(
@@ -263,12 +275,36 @@ if __name__ == "__main__":
     )
     a = next(iter(loader))
     total_batches = len(loader)
-    print(f"Total batches: {total_batches}")
+
+    # print(f"Total batches: {total_batches}")
+    # idx = a[0]
+    # batch_data = a[1]
+    # print(f"idx is {idx} and data is {type(batch_data)} length {len(batch_data)}")
+    # for i in batch_data:
+    #     print(type(i))
     for batch_idx, batch_data in enumerate(loader):
         # Your batch processing code here
-        print(f"At each batch index {batch_idx}")  
+        cg, tg, assign_mat, caption_tokens, label = batch_data
+        print(cg)
+        print(f"----------CG--------------")
+        print(tg.ndata['feat'])
+        tg_unb = dgl.unbatch(tg)
+        print(tg_unb)
+    
+        print(f"----------TG--------------")
+        # print(assign_mat[0])
+        # print(f"type is {type(assign_mat[0])}")
+        # print(f"----------ASSIGN_MAT--------------")
+        # print(caption_tokens.shape)
+        # # caption_tokens = nn.utils.rnn.pad_sequence(caption_tokens, batch_first=True)
+        # # print(caption_tokens.unsqueeze(-1))
+        # print(f"----------Caption_tokens--------------")
+        # print(label.shape)
+        # print(f"----------Label--------------")
+        break
+ 
 
-    print(f"Number of batches iterated: {batch_idx + 1}")
+    # print(f"Number of batches iterated: {batch_idx + 1}")
     # print("START PRINT CONTENT")
     # print(a[0])
     # print("---------------------")
@@ -279,4 +315,4 @@ if __name__ == "__main__":
     # print(a[3])
     # print("-------------------")
     # print(a[4])
-    print(len(loader.dataset.vocab))
+    # print(len(loader.dataset.vocab))

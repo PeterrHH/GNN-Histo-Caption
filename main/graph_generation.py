@@ -184,6 +184,8 @@ if __name__ == "__main__":
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
     GB.build(folder,"graph","test")
+    GB.build(folder,"graph","train")
+    GB.build(folder,"graph","eval")
     # ne = NucleiExtractor()
 
 

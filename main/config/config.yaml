@@ -2,12 +2,13 @@ dataset_path: "../../Report-nmi-wsi"
 histocartography_path: "../histocartography/histocartography"
 graph_path: "graph"
 output_path: "output"
-vocab_path: "../../Report-nmi-wsi/vocab_bladderreport.pkl"
+vocab_path: "../../Report-nmi-wsi/main/vocab_bladderreport.pkl"
 learning_rate: 0.001
 phase: train # train, test, eval
 batch_size: batch_size
 epochs: 40
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
+batch_size: 32
 
 gnn_param:
   cell_layers: 2
@@ -15,6 +16,7 @@ gnn_param:
   cell_conv_method: "GIN" # GCN, GAT, GraphSage, GIN, PNA
   tissue_conv_method: "GIN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
+  aggregate_method: "sum" # sum, mean
 
 
 lstm_param:
