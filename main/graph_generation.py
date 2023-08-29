@@ -16,13 +16,19 @@ from urllib.request import urlopen
 import ssl
 import json
 
-# Read the YAML configuration file
-with open("config/base.yaml", 'r') as config_file:
-    config_data = yaml.safe_load(config_file)
+'''
+115971_003.bin
+
+'''
+
+# # Read the YAML configuration file
+# with open("config/.yaml", 'r') as config_file:
+#     config_data = yaml.safe_load(config_file)
 
 # # Retrieve the value for the key "Place"
 # place_value = config_data.get("histocartography_path")
-
+sys.path.append('../histocartography/histocartography')
+sys.path.append('../histocartography')
 from preprocessing import (
     VahadaneStainNormalizer,         # stain normalizer
     NucleiExtractor,                 # nuclei detector 
@@ -128,47 +134,47 @@ class GraphBuilding:
                 pass
 
             #   Build Cell Graph and save it
-            # try: 
-            cg, nuclei_centroid = self.build_cg(image)
-            save_graphs(
-                cg_out,
-                g_list = [cg]
-            )
-            # except Exception as e:
-            #     print('Warning: {} failed during cell graph building.'.format(image_path))
-            #     print(f"Exception is {e} for cell Graph")
-            #     self.image_failed.append(image_path)
-            #     pass
+            try: 
+                cg, nuclei_centroid = self.build_cg(image)
+                save_graphs(
+                    cg_out,
+                    g_list = [cg]
+                )
+            except Exception as e:
+                print('Warning: {} failed during cell graph building.'.format(image_path))
+                print(f"Exception is {e} for cell Graph")
+                self.image_failed.append(image_path)
+                pass
 
             #   Build Tissue Graph and save it
-            # try:
-            tissue_graph, tissue_map = self.build_tg(image)
-            save_graphs(
-                tg_out,
-                g_list = [tissue_graph]
-            )
-            # except Exception as e:
-            #     print('Warning: {} failed during tissue graph building.'.format(image_path))
-            #     print(f"Exception is {e} for tissue Graph")
-            #     self.image_failed.append(image_path)
-            #     pass
-
-            #try: 
-            assignment_matrix = self.assignment_mat_builder.process(nuclei_centroid, tissue_map)
-            #   Create relevant directory if not exist already
-            directory = os.path.dirname(assign_out)
-            os.makedirs(directory, exist_ok=True)
-            with h5py.File(assign_out, "w") as output_file:
-                output_file.create_dataset(
-                    "assignment_matrix",
-                    data=assignment_matrix,
-                    compression="gzip",
-                    compression_opts=9,
+            try:
+                tissue_graph, tissue_map = self.build_tg(image)
+                save_graphs(
+                    tg_out,
+                    g_list = [tissue_graph]
                 )
-            # except:
-            #     print('Warning: {} failed during assignment matrix generation.'.format(image_path))
-            #     self.image_failed.append(image_path)
-            #     pass
+            except Exception as e:
+                print('Warning: {} failed during tissue graph building.'.format(image_path))
+                print(f"Exception is {e} for tissue Graph")
+                self.image_failed.append(image_path)
+                pass
+
+            try: 
+                assignment_matrix = self.assignment_mat_builder.process(nuclei_centroid, tissue_map)
+            #   Create relevant directory if not exist already
+                directory = os.path.dirname(assign_out)
+                os.makedirs(directory, exist_ok=True)
+                with h5py.File(assign_out, "w") as output_file:
+                    output_file.create_dataset(
+                        "assignment_matrix",
+                        data=assignment_matrix,
+                        compression="gzip",
+                        compression_opts=9,
+                    )
+            except:
+                print('Warning: {} failed during assignment matrix generation.'.format(image_path))
+                self.image_failed.append(image_path)
+                pass
     
         print('Out of {} images, {} successful graph generations.'.format(
             len(images_path),
@@ -179,7 +185,7 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../Report-nmi-wsi"
+    folder = "../../Report-nmi-wsi/Images"
     target = "./target_img/target.png"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
