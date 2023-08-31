@@ -7,7 +7,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 import pickle
+from tqdm import tqdm
+import math
 
 import yaml
 import sys
@@ -22,6 +25,8 @@ import wandb
 from argparse import ArgumentParser
 from models.BaseModel import GNN_LSTM
 from Vocabulary import Vocabulary
+from models.Graph_Model import GNNEncoder
+from models.LSTM import LSTMDecoder
 
 
 
@@ -113,6 +118,21 @@ def argparser():
 
     return parser
 
+def eval(eval_loader,encoder,decoder,device,epoch, batch_size, correct_cap ) :
+    total_samples = len(eval_loader)
+    total_step = math.ceil(total_samples / batch_size)
+    for step in tqdm(range(total_step)):
+        cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(eval_dl))
+        caption_dict = {str(i + 1): value for i, value in enumerate(caption)}
+        cg = cg.to(DEVICE)
+        tg = tg.to(DEVICE)
+        encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+        with torch.no_grad():
+            out = encoder(cg,tg,assign_mat)
+            lstm_out = decoder(out,caption_tokens)
+
+
+
 def main():
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_model = False
@@ -134,9 +154,9 @@ def main():
 
     
     #   make the dl here
-    dataloader = make_dataloader(
+    train_dl = make_dataloader( # !!!!!!!!!!!!!!!!!!! Change it back to train
         batch_size = args["batch_size"],
-        split = "train",
+        split = "test",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
         vocab_path = args["vocab_path"],
@@ -150,24 +170,24 @@ def main():
         split = "test",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
-        vocab_path = args["vocab_path"]
+        vocab_path = args["vocab_path"],
         shuffle=True,
         num_workers=0,
         load_in_ram = True
     )
 
-    eval_dl = make_dataloader(
-        batch_size = args["batch_size"],
-        split = "test",
-        base_data_path = args["dataset_path"],
-        graph_path = args["graph_path"],
-        vocab_path = args["vocab_path"]
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True
-    )
+    # eval_dl = make_dataloader(
+    #     batch_size = args["batch_size"],
+    #     split = "eval",
+    #     base_data_path = args["dataset_path"],
+    #     graph_path = args["graph_path"],
+    #     vocab_path = args["vocab_path"],
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True
+    # )
     #   Define Model, Loss and 
-    vocab_size = len(dataloader.dataset.vocab)
+    vocab_size = len(train_dl.dataset.vocab)
     encoder = GNNEncoder(
         cell_conv_method = "GCN", 
         tissue_conv_method = "GCN", 
@@ -186,50 +206,66 @@ def main():
         device = DEVICE)
  
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr= learning_rate)
+    all_params = list(decoder.parameters())  + list( encoder.parameters() )
+    optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
     
     MAX_LENGTH = 100
     # model = GNN_LSTM(encoder, decoder,hidden_dim, vocab_size,gnn_param, lstm_param, phase)
     # model.to(DEVICE)
-    if args.phase == "train":
+    if args["phase"] == "train":
         #   Model training
 
         #   set the wandb project where this run will be logged
-        wandb.init(
-            project="GNN simplifcation and application in histopathology image captioning",
-            #   track hyperparameters and run metadata
-            config={
-                "architecture": "GNN-LSTM",
-                "dataset": "Nmi-Wsi-Diagnosis",
-                "epoch": args["epochs"]
-            }
-        )
+        # wandb.init(
+        #     project="GNN simplifcation and application in histopathology image captioning",
+        #     #   track hyperparameters and run metadata
+        #     config={
+        #         "architecture": "GNN-LSTM",
+        #         "dataset": "Nmi-Wsi-Diagnosis",
+        #         "epoch": args["epochs"]
+        #     }
+        # )
+        total_samples = len(train_dl)
+        batch_size = 4
+        total_step = math.ceil(total_samples / batch_size)
+        
+        print(f"Number of steps per epoch: {total_step}")
+        print(type(train_dl))
         for epoch in range(args["epochs"]):
             total_loss = 0.0
-            for batched_idx, batch_data in tqdm(enumerate(train_dataloader)):
-                if args["graph_model_type"] == "Hierarchical":
-                    cg, tg, assign_mat, caption_tokens, labels = batch_data
-                    cg = cg.to(DEVICE)
-                    tg = tg.to(DEVICE)
-                    assign_mat = assign_mat.to(DEVICE)
-                    caption_tokens = caption_tokens.to(DEVICE)
-                    encoder , decoder = encoder.to(device) , decoder.to(device)
-                    encoder.zero_grad()    
-                    decoder.zero_grad()
-                    out = encoder(cg,tg,assign_mat)
-                    lstm_out = decoder(out,caption_tokens)
-                    loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
-                    loss.backward()
-                    optimizer.step()
-            #   At the end, run eval set     
-                wandb.log({"loss":loss})
-                print(f"At epoch {epoch}, step {batched_idx+1} loss is {loss}")
-                optimizer.zero_grad()
-                model
-                loss = F.cross_entropy(pred, labels)
-                total_loss += loss
+            # for batched_idx, batch_data in enumerate(tqdm(train_dl)):
+            for step in range(total_step):
+                #if args["graph_model_type"] == "Hierarchical":
+                cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(train_dl))
+
+                cg = cg.to(DEVICE)
+                tg = tg.to(DEVICE)
+                # assign_mat = assign_mat.to(DEVICE)
+                caption_tokens = caption_tokens.to(DEVICE) # (batch_size, num_sentences, num_words_in_sentence) num_sentence = 6, num_words = 16
+                encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+                encoder.zero_grad()    
+                decoder.zero_grad()
+                out = encoder(cg,tg,assign_mat) # (batch_size, 1, embedding)
+                print(f"Out shape is {out.shape}")
+                lstm_out = decoder(out,caption_tokens)
+                print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
+            #   At the end, run eval set  
+                print(f"-------LSTM Output------")  
+                print(lstm_out[0])
+                print(f"-------LSTM Output------")  
+                print(f"-------Caption Tokens------")
+                print(caption_tokens[0])
+                print(f"-------Caption Tokens------")
+                #wandb.log({"loss":loss})
+                print(f"LSTM view shape {lstm_out.view(-1, vocab_size).shape} and cap_tok {caption_tokens.view(-1).shape}")
+                loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
+                #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
+                print(f"At epoch {epoch}, step {step} loss is {loss}")
                 loss.backward()
                 optimizer.step()
+                break
+            break
+
                 
 
     else:
@@ -239,7 +275,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
+   #main()
     from dataloader import make_dataloader
     from Vocabulary import Vocabulary
     from models.Graph_Model import GNNEncoder
@@ -258,37 +294,43 @@ if __name__ == "__main__":
         load_in_ram = True
     )
     vocab_size = len(loader.dataset.vocab)
+    encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
+    decoder = LSTMDecoder(vocab_size = vocab_size, embed_size = 256, hidden_size = 128,  batch_size=4, device = DEVICE)
+
+    print(len(list(encoder.parameters())))
+    print(len(list(decoder.parameters())))
+    # 
     for batched_idx, batch_data in enumerate(loader):
-        print(batch_data[0])
-        cg, tg, assign_mat, caption_tokens, label = batch_data  
-       # print(assign_mat)
-        print(caption_tokens[0])
-        encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
+        
+        cg, tg, assign_mat, caption_tokens, labels, caption = batch_data
+
+        cg = cg.to(DEVICE)
+        tg = tg.to(DEVICE)
+        # assign_mat = assign_mat.to(DEVICE)
+        caption_tokens = caption_tokens.to(DEVICE)
+        print(f"--------------Caption -----------")
+        print(caption)
+        print(len(caption))
+        print(f"--------------Caption -----------")
+        encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+        encoder.zero_grad()    
+        decoder.zero_grad()
         out = encoder(cg,tg,assign_mat)
-        print(f"length is {len(assign_mat)}")
-        print(f"GNN out shape is {out.shape}")
-        decoder = LSTMDecoder(vocab_size = vocab_size, embed_size = 256, hidden_size = 128,  batch_size=4, device = DEVICE)
+        print(f"Out shape is {out.shape}")
         lstm_out = decoder(out,caption_tokens)
-        print(f"LSTM out shape {lstm_out.shape}")
+        print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
+
         max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
         print(max_indices.shape)
         print(max_indices[0])
-        print(f"length {loader.dataset.vocab.idx2word[88]}")
+        #print(f"length {loader.dataset.vocab.idx2word[88]}")
         for embed in max_indices:
             sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
             print(sentence)
             print("\n")
             print("-------------")
             print("\n")
-            
-        # first = lstm_out[0].tolist()
-        # output_words = []
-        # vocab = pickle.load(open('vocab_bladderreport.pkl','rb'))
-        # for batch in first:
-        #     batch_words = [loader.dataset.vocab.idx2word[idx] for idx in batch]
-        #     output_words.append(batch_words)
-        #     print(output_words)
-        # print(loader.dataset.vocab.idx2word[3])
-
         break
+    
+
     

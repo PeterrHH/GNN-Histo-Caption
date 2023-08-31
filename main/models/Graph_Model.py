@@ -104,11 +104,11 @@ class GNNEncoder(nn.Module):
                 assignment_mat[i - 1].t(), cg_feat[intervals[i - 1]:intervals[i], :]
             )
             ll_h_concat.append(h_agg)
-        print(f"ll_h_contact size is {len(ll_h_concat)}")
-        print(f"shape within 0: {ll_h_concat[0].shape} and 1 {ll_h_concat[1].shape} and tissue_feat here is {tg_feat.shape}")
+       # print(f"ll_h_contact size is {len(ll_h_concat)}")
+       # print(f"shape within 0: {ll_h_concat[0].shape} and 1 {ll_h_concat[1].shape} and tissue_feat here is {tg_feat.shape}")
         cat = torch.cat(ll_h_concat, dim=0)
-        print(f"cat size {cat.shape}")
-        print(f"tg_feat size {tg_feat.shape}")
+       # print(f"cat size {cat.shape}")
+       # print(f"tg_feat size {tg_feat.shape}")
         return torch.cat((cat, tg_feat), dim=1)
 
 

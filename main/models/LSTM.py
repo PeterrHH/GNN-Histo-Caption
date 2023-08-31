@@ -4,7 +4,7 @@ import torch
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self,vocab_size, embed_size, batch_size, hidden_size, device = "cpu",dropout = 0.5, num_layers = 1):
+    def __init__(self,vocab_size, embed_size, batch_size, hidden_size,device = "cpu",dropout = 0.5, num_layers = 1):
         super().__init__()
         assert dropout <= 1
         self.dropout = dropout
@@ -14,6 +14,8 @@ class LSTMDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_size = batch_size
+        self.num_sentence = 6
+        self.sentence_length = 16
         self.device = device
         self.dropout = nn.Dropout(p = self.dropout)
         self.word_embedding = nn.Embedding( self.vocab_size , self.embed_size)
@@ -21,17 +23,22 @@ class LSTMDecoder(nn.Module):
         self.linear = nn.Linear(self.hidden_size, self.vocab_size)
 
     def init_hidden(self):
-        return ( torch.zeros( self.num_layers , self.batch_size , self.hidden_size  ).to(self.device),
-        torch.zeros( self.num_layers , self.batch_size , self.hidden_size  ).to(self.device) )
+        return ( torch.zeros(self.batch_size , self.num_sentence, self.sentence_length  ).to(self.device),
+        torch.zeros( self.batch_size , self.num_sentence, self.sentence_length  ).to(self.device) )
 
     def forward(self,features,captions):
         # decoded_output, _ = self.decoder(encoded_output)
         # return decoded_output
-        captions = captions[:,:-1]
+       # print(f"IN LSTM, the feature size is {features.shape}")
+        if self.batch_size != features.shape[0]:
+            self.batch_size = features.shape[0] 
+        # captions = captions[:,:-1]
         h_0, c_0 = self.init_hidden()
-        print(f"Hidden shape is {h_0.shape}")
-        print(f"Cell shape is {c_0.shape}")
+       # print(f"Hidden shape is {h_0.shape}")
+       # print(f"Cell shape is {c_0.shape}")
+        print(f'caption have shape {captions.shape}')
         embeds = self.word_embedding( captions)
+        print(f"Hidden shape is {h_0.shape}")
         print(f"word embedding shape {embeds.shape} and features shape is {features.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1  ) 
         embeddings,_ = self.lstm(inputs,(h_0,c_0))

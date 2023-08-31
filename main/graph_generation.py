@@ -124,16 +124,18 @@ class GraphBuilding:
             tg_out = os.path.join(store_path, 'tissue_graphs', split, image_name.replace('.png', '.bin'))
             assign_out = os.path.join(store_path, 'assignment_mat', split, image_name.replace('.png', '.h5'))
 
-            #   Stain Normalisation
-            try: 
-                image = self.stain_normalizer.process(image)
-                print("WORKED in normalizing")
-            except:
-                print('Warning: {} failed during stain normalization.'.format(image_path))
-                self.image_failed.append(image_path)
-                pass
+            # #   Stain Normalisation
+            # try: 
+            #     image = self.stain_normalizer.process(image)
+            #     print("WORKED in normalizing")
+            # except Exception as e:
+            #     print("-----------------------------------------------")
+            #     print('Warning: {} failed during stain normalization.'.format(image_path))
+            #     print("-----------------------------------------------")
+            #     self.image_failed.append(image_path)
+            #     pass
 
-            #   Build Cell Graph and save it
+            # #   Build Cell Graph and save it
             try: 
                 cg, nuclei_centroid = self.build_cg(image)
                 save_graphs(
@@ -141,8 +143,10 @@ class GraphBuilding:
                     g_list = [cg]
                 )
             except Exception as e:
+                print("------------------------Cell Graph-----------------------")
                 print('Warning: {} failed during cell graph building.'.format(image_path))
                 print(f"Exception is {e} for cell Graph")
+                print("------------------------Cell Graph-----------------------")
                 self.image_failed.append(image_path)
                 pass
 
@@ -154,8 +158,10 @@ class GraphBuilding:
                     g_list = [tissue_graph]
                 )
             except Exception as e:
+                print("------------------------Tissue Graph-----------------------")
                 print('Warning: {} failed during tissue graph building.'.format(image_path))
                 print(f"Exception is {e} for tissue Graph")
+                print("------------------------Tissue Graph-----------------------")
                 self.image_failed.append(image_path)
                 pass
 
@@ -171,8 +177,11 @@ class GraphBuilding:
                         compression="gzip",
                         compression_opts=9,
                     )
-            except:
+            except Exception as e:
+                print("------------------------Assign Matrix-----------------------")
                 print('Warning: {} failed during assignment matrix generation.'.format(image_path))
+                print(f'Exception is {e} for assign matrix')
+                print("------------------------Assign Matrix-----------------------")
                 self.image_failed.append(image_path)
                 pass
     
@@ -185,13 +194,15 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../Report-nmi-wsi/Images"
+    folder = "../../Report-nmi-wsi"
     target = "./target_img/target.png"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
     GB.build(folder,"graph","test")
-    GB.build(folder,"graph","train")
-    GB.build(folder,"graph","eval")
+    # GB.build(folder,"graph","train")
+    # GB.build(folder,"graph","eval")
     # ne = NucleiExtractor()
+
+
 
 

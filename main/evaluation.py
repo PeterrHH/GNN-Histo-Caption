@@ -12,7 +12,7 @@ from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.cider.cider import Cider
 from pycocoevalcap.spice.spice import Spice
-
+import ssl
 class Scorer():
     def __init__(self,ref,gt):
         self.ref = ref
@@ -51,6 +51,7 @@ class Scorer():
         #     print('{}:{}'.format(key,value))
 
 if __name__ == '__main__':
+    ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
     ref = {
         '1':['go down the stairs all the way and stop at the bottom .'],
         '2':['this is a cat.'],
