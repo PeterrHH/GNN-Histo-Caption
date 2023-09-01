@@ -118,7 +118,7 @@ class GraphBuilding:
             print(image_path)
             read_path = os.path.join(folder,image_path)
             image = np.array(Image.open(read_path))
-            print(f"Image has shape {image.shape}")
+            # print(f"Image has shape {image.shape}")
         #   Get the store path
             cg_out = os.path.join(store_path, 'cell_graphs', split, image_name.replace('.png', '.bin'))
             tg_out = os.path.join(store_path, 'tissue_graphs', split, image_name.replace('.png', '.bin'))
@@ -194,13 +194,13 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../Report-nmi-wsi"
+    folder = "../../Report-nmi-wsi/Images"
     target = "./target_img/target.png"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
     GB.build(folder,"graph","test")
-    # GB.build(folder,"graph","train")
-    # GB.build(folder,"graph","eval")
+    GB.build(folder,"graph","train")
+    GB.build(folder,"graph","eval")
     # ne = NucleiExtractor()
 
 
