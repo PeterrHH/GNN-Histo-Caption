@@ -3,12 +3,15 @@ import math
 import numpy as np
 import torch.nn.functional as F
 #   Graph Message Passing
-from torch_geometric.nn import GCNConv, GATConv, CuGraphSAGEConv, GINConv, PNAConv
+from dgl.nn import GraphConv, GATConv, SAGEConv, GINConv, PNAConv, MaxPooling, AvgPooling, SumPooling
+#from torch_geometric.nn import GCNConv, GATConv, CuGraphSAGEConv, GINConv, PNAConv
 #   Graph Pooling Opeartion
 from torch_geometric.nn import dense_diff_pool, dense_mincut_pool
 from torch_geometric.nn.norm import GraphNorm, BatchNorm
 import dgl
 import h5py
+import sys
+from Vocabulary import Vocabulary
 
 
 
@@ -22,10 +25,10 @@ class GNNEncoder(nn.Module):
     def __init__(self, cell_conv_method, tissue_conv_method, pool_method, num_layers, aggregate_method, input_feat = 514,output_size = 128):
         super().__init__()
         self.conv_map = {
-            "GCN": GCNConv,
+            "GCN": GraphConv,
             "GAT": GATConv,
-            "GraphSage": CuGraphSAGEConv,
-            "GIN": GINConv,
+            "GraphSage": SAGEConv,
+            # "GIN": GINConv,
             "PNA":PNAConv
         }
         self.pool_map = {
@@ -54,14 +57,43 @@ class GNNEncoder(nn.Module):
             self.selected_cell_conv_method = self.conv_map[cell_conv_method]
         if tissue_conv_method in self.conv_map:
             self.selected_tissue_conv_method = self.conv_map[cell_conv_method]
-        if tissue_conv_method in self.conv_map:
-            self.selected_tissue_conv_method = self.conv_map[tissue_conv_method]
    
         else:
             raise ValueError("No matching Graph Convolution methods")
         
         if pool_method in self.pool_map:
             self.selected_pool_method = self.pool_map[pool_method]
+        self.cell_layer = nn.ModuleList()
+        self.tissue_layer = nn.ModuleList()
+        for _ in range(1):
+            self.cell_layer.append(
+                nn.Sequential(
+                    GraphConv(514,514),
+                    GraphNorm(514),
+                    BatchNorm(514)
+                )
+            )
+        for _ in range(3):
+            self.tissue_layer.append(
+                nn.Sequential(
+                    self.selected_tissue_conv_method(1028,1028),
+                    GraphNorm(1028),
+                    BatchNorm(1028)
+                )
+            )
+        self.conv1 = GraphConv(514,514)
+        self.gn = GraphNorm(514)
+        self.bn = BatchNorm(514)
+        self.cell_lin_out = nn.Linear(514,256)
+        # self.conv2 = GraphConv(514,514)
+        # self.maxpool = MaxPooling()
+ 
+        # self.t_conv1 = GraphConv(514,514)
+        # self.gn = GraphNorm(514)
+        # self.bn = BatchNorm(514)
+        # self.conv2 = GraphConv(514,514)
+        self.maxpool = MaxPooling()
+        self.lin_out = nn.Linear(1028,256)
         '''
         Each Layer contains:
         - Message Passing
@@ -70,23 +102,6 @@ class GNNEncoder(nn.Module):
         - Pooling (optional)
         - Activation (We use RELU here)
         '''
-
-        for _ in range(self.num_layers):
-            self.cell_layers.append(
-                self.selected_cell_conv_method(self.input_feat,self.input_feat)
-            )
-            self.cell_graph_norms.append(GraphNorm(self.input_feat))
-            self.cell_batch_norms.append(BatchNorm(self.input_feat))
-            if pool_method:
-                self.cell_layers.append(self.selected_pool_method(self.input_feat))
-
-        for _ in range(self.num_layers):
-            self.tissue_layers.append(
-                self.selected_tissue_conv_method(self.input_feat*2,self.input_feat*2)
-            )
-            self.tissue_graph_norms.append(GraphNorm(self.input_feat*2))
-            self.tissue_batch_norms.append(BatchNorm(self.input_feat*2))
-        self.linear = nn.Linear(self.input_feat*2, self.output_size)
 
     def compute_assigned_feats(self, cg_feat,cell_graph,assignment_mat,tg_feat):
         """
@@ -112,83 +127,68 @@ class GNNEncoder(nn.Module):
         return torch.cat((cat, tg_feat), dim=1)
 
 
-    def readout(self,tissue_graph):
+    def readout(self,tissue_graph,x):
         '''
         Aggregate tissue graph feature to obtain a embedding that can be apssed into LSTM
         '''
         # tissue_feat = tg['feat']
         if self.aggregate_method == "mean":
-            aggregated_features = dgl.mean_nodes(tissue_graph,'h')
+            pool = AvgPooling()
+        elif self.aggregate_method == "max":
+            pool = MaxPooling()
         else:
             #   sum
-            aggregated_features = dgl.sum_nodes(tissue_graph,'h')
+            pool = SumPooling()
+        aggregated_features = pool(tissue_graph,x)
         return aggregated_features
     
     def forward(self,cell_graph,tissue_graph,assignment_mat):
-        #   Cell Aggregation, gets all the features in a cell
-        #   Original paper of HACT_NET use lstm connection
+
+        # #   Cell Aggregation, gets all the features in a cell
+        # #   Original paper of HACT_NET use lstm connection
         cell_feat = cell_graph.ndata['feat']
         cell_edge = torch.stack(cell_graph.edges())
         tissue_edge = torch.stack(tissue_graph.edges())
         tissue_feat = tissue_graph.ndata['feat']
-        # print(f"Cell feaeture {cell_feat.shape}")
-        # print(f"Tissue feaeture {tissue_feat.shape}")
-        for i in range(self.num_layers):
-            cell_feat = self.cell_layers[i](cell_feat,cell_edge)
-            cell_feat = self.cell_graph_norms[i](cell_feat)
-            cell_feat = self.cell_batch_norms[i](cell_feat)
-            if self.selected_pool_method:
-                cell_feat = self.pooling[i](cell_feat)
-            cell_feat = F.relu(cell_feat)
-            cell_graph.ndata['h'] = cell_feat
-        # print(f"Cell Feature after propagation {cell_feat.shape}")
-        #   Concat features of cell and tissue graph
-        '''
-        assignment_mat have shape (num_graph, num_cell_node_each_graph, num_tissue_node_each_graph)
-        '''
-        sum_tissue_feat = self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat)
-        # print(f"--------Sum Tissue Feat-----------")
-        # print(type(sum_tissue_feat))
-        # print(f"Cell Feat: {cell_feat.shape}")
-        # print(f"Tissue Feat: {tissue_feat.shape}")
-        # print(f"Sum tissue feature {sum_tissue_feat.shape}")
-        # print(f"--------Sum Tissue Feat-----------")
-        #   Propogate Tissue Graph
-        for i in range(self.num_layers):
-            sum_tissue_feat = self.tissue_layers[i](sum_tissue_feat, tissue_edge)
-            sum_tissue_feat = self.tissue_graph_norms[i](sum_tissue_feat)
-            sum_tissue_feat = self.tissue_batch_norms[i](sum_tissue_feat)
-            if self.selected_pool_method:
-                sum_tissue_feat = self.pooling[i](sum_tissue_feat)
-            sum_tissue_feat = F.relu(sum_tissue_feat)
-        sum_tissue_feat = self.linear(sum_tissue_feat)
-        #  readout a featurize 
-        #print(f"Before readout shape {sum_tissue_feat.shape}")
-        tissue_graph.ndata['h'] = sum_tissue_feat
-        aggregate_feat = self.readout(tissue_graph)
-        return aggregate_feat.unsqueeze(1)
 
-
+        # for layer in self.cell_layer:
+        #     cell_feat = layer[0](cell_graph, cell_feat)
+        #     cell_feat = layer[1](cell_feat)
+        #     cell_feat = layer[2](cell_feat)
+        cell_feat = self.conv1(cell_graph,cell_feat)
+        cell_feat = self.gn(cell_feat)
+        cell_feat = self.bn(cell_feat)
+        x = self.readout(cell_graph,cell_feat)
+        x = self.cell_lin_out(x)
+        # cell_feat = F.relu(cell_feat)
+        print("-------------cell_feat-------------")
+        print(cell_feat)
+        print(f"Cell feat shape {cell_feat.shape}")
+        print(f"X shape {x.shape}")
+        print("-------------cell_feat ------------")
+        # x = self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat)
+        # print(f"SUM TISSUE FEAT SHAPE {x.shape}")
+        # for layer in self.tissue_layer:
+        #     x = layer[0](tissue_graph,x)
+        #     x = layer[1](x)
+        #     x = layer[2](x)
+        # # x = F.relu(x)
+        # x = self.readout(tissue_graph,x)
+        # x = self.lin_out(x)
+        return x.unsqueeze(1)
+    
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    import networkx as nx
     def h5_to_tensor(h5_path):
         h5_object = h5py.File(h5_path, 'r')
         out = torch.from_numpy(np.array(h5_object['assignment_matrix']))
         return out
-    # cell_path = "graph/cell_graphs/test/1_00061_sub0_002.bin"
-    # tissue_path = "graph/tissue_graphs/test/1_00061_sub0_002.bin"
-    # assignment_path = "graph/assignment_mat/test/1_00061_sub0_002.h5"
-
-
-    # c_graphs = dgl.load_graphs(cell_path)
-    # t_graphs = dgl.load_graphs(cell_path)
-    # cg = c_graphs[0][0]
-    # tg = t_graphs[0][0]
-    # assign_mat = h5_to_tensor(assignment_path)
     import sys
     sys.path.append('../main')
     from dataloader import make_dataloader 
     loader = make_dataloader(
-        batch_size = 4,
+        batch_size = 16,
         split = "test",
         base_data_path = "../../Report-nmi-wsi",
         graph_path = "graph",
@@ -198,11 +198,39 @@ if __name__ == "__main__":
         load_in_ram = True
     )
     #a = next(iter(loader))
-    for batched_idx, batch_data in loader:
-        cg, tg, assign_mat, caption_tokens, label = batch_data  
+    for batched_idx, batch_data in enumerate(loader):
+        cg, tg, assign_mat, caption_tokens, label,caption = batch_data  
         encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
-        out = encoder(cg,tg,assign_mat)
-        print(f"length is {len(assign_mat)}")
-        print(f"Outputshape is {out.shape}")
+        # out = encoder(cg,tg,assign_mat)
+        # print(f"length is {len(assign_mat)}")
+        # print(f"Outputshape is {out.shape}")
+        # print(encoder)
+        # GCNConv()
+        # print(out)
+        print(cg.ndata['feat'].shape)
+        print(cg.ndata.keys())
+        # print(cg.shape)
+        # GCN = GraphConv(514,514)
+        # # Check for NaN values
+        # nan_mask = torch.isnan(cg.ndata['feat'])
+
+        # # Count the number of NaN values
+        # num_nan_values = torch.sum(nan_mask).item()
+
+        # print("Number of NaN values in the tensor:", num_nan_values)
+        # cell_edge = torch.stack(cg.edges())
+        # out = GCN(cg,cg.ndata['feat'])
+        # print(out)
+        # nan_mask = torch.isnan(out)
+        glist = dgl.unbatch(cg)
+        # Count the number of NaN values
+        # num_nan_values = torch.sum(nan_mask).item()
+
+        # print("Number of NaN values in the out:", out)
+        fig, ax = plt.subplots()
+        nx.draw(glist[0].to_networkx(), ax=ax)
+        ax.set_title('Visualise')
+        plt.show()
+
         break
 

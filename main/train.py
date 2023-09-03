@@ -150,11 +150,9 @@ def main():
     lstm_param = args["lstm_param"]
     #   set path to save checkpoints
 
-
-
-    
     #   make the dl here
-    train_dl = make_dataloader( # !!!!!!!!!!!!!!!!!!! Change it back to train
+    #   !!!!!!!!!!! Change it back to train
+    train_dl = make_dataloader(
         batch_size = args["batch_size"],
         split = "test",
         base_data_path = args["dataset_path"],
@@ -165,16 +163,16 @@ def main():
         load_in_ram = True
     )
 
-    test_dl = make_dataloader(
-        batch_size = args["batch_size"],
-        split = "test",
-        base_data_path = args["dataset_path"],
-        graph_path = args["graph_path"],
-        vocab_path = args["vocab_path"],
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True
-    )
+    # test_dl = make_dataloader(
+    #     batch_size = args["batch_size"],
+    #     split = "test",
+    #     base_data_path = args["dataset_path"],
+    #     graph_path = args["graph_path"],
+    #     vocab_path = args["vocab_path"],
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True
+    # )
 
     # eval_dl = make_dataloader(
     #     batch_size = args["batch_size"],
@@ -195,7 +193,8 @@ def main():
         num_layers = 3, 
         aggregate_method = "sum", 
         input_feat = 514,
-        output_size = 256)
+        output_size = 256
+    )
 
 
     decoder = LSTMDecoder(
@@ -203,7 +202,9 @@ def main():
         embed_size = 256, 
         hidden_size = 128,  
         batch_size= args["batch_size"], 
-        device = DEVICE)
+        device = DEVICE
+    )
+    encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
  
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
     all_params = list(decoder.parameters())  + list( encoder.parameters() )
@@ -242,32 +243,32 @@ def main():
                 tg = tg.to(DEVICE)
                 # assign_mat = assign_mat.to(DEVICE)
                 caption_tokens = caption_tokens.to(DEVICE) # (batch_size, num_sentences, num_words_in_sentence) num_sentence = 6, num_words = 16
-                encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+                # print(encoder)
                 encoder.zero_grad()    
                 decoder.zero_grad()
+                # print(f"Input shape is {cg}")
                 out = encoder(cg,tg,assign_mat) # (batch_size, 1, embedding)
-                print(f"Out shape is {out.shape}")
+                print(f"Output shape of the encoder {out.shape}")
+                #print(f"Out shape is {out.shape}")
+                # print(out)
+                # print(f"------out--------")
                 lstm_out = decoder(out,caption_tokens)
-                print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
+                #print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
             #   At the end, run eval set  
-                print(f"-------LSTM Output------")  
-                print(lstm_out[0])
-                print(f"-------LSTM Output------")  
-                print(f"-------Caption Tokens------")
-                print(caption_tokens[0])
-                print(f"-------Caption Tokens------")
                 #wandb.log({"loss":loss})
-                print(f"LSTM view shape {lstm_out.view(-1, vocab_size).shape} and cap_tok {caption_tokens.view(-1).shape}")
+                lstm_out_prep = lstm_out.view(-1, vocab_size)
+                caption_prep = caption_tokens.view(-1) 
+                #print(f"LSTM view shape {lstm_out.view(-1, vocab_size).shape} and cap_tok {caption_tokens.view(-1).shape}")
+                #print(f"LSTM OUT PREP type {type(lstm_out_prep)} and caption_prep {type(caption_prep)}")
                 loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
                 print(f"At epoch {epoch}, step {step} loss is {loss}")
                 loss.backward()
                 optimizer.step()
-                break
+                print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
+                # print(cg.ndata['feat'])
+
             break
-
-                
-
     else:
         #   Only run the Test set
         print("test")
@@ -275,62 +276,62 @@ def main():
 
 
 if __name__ == "__main__":
-   #main()
-    from dataloader import make_dataloader
-    from Vocabulary import Vocabulary
-    from models.Graph_Model import GNNEncoder
-    from models.LSTM import LSTMDecoder
-    import torch
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(DEVICE)
-    loader = make_dataloader(
-        batch_size = 4,
-        split = "test",
-        base_data_path = "../../Report-nmi-wsi",
-        graph_path = "graph",
-        vocab_path = "../../Report-nmi-wsi/vocab_bladderreport.pkl",
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True
-    )
-    vocab_size = len(loader.dataset.vocab)
-    encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
-    decoder = LSTMDecoder(vocab_size = vocab_size, embed_size = 256, hidden_size = 128,  batch_size=4, device = DEVICE)
+    main()
+    # from dataloader import make_dataloader
+    # from Vocabulary import Vocabulary
+    # from models.Graph_Model import GNNEncoder
+    # from models.LSTM import LSTMDecoder
+    # import torch
+    # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print(DEVICE)
+    # loader = make_dataloader(
+    #     batch_size = 4,
+    #     split = "test",
+    #     base_data_path = "../../Report-nmi-wsi",
+    #     graph_path = "graph",
+    #     vocab_path = "../../Report-nmi-wsi/vocab_bladderreport.pkl",
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True
+    # )
+    # vocab_size = len(loader.dataset.vocab)
+    # encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
+    # decoder = LSTMDecoder(vocab_size = vocab_size, embed_size = 256, hidden_size = 128,  batch_size=4, device = DEVICE)
 
-    print(len(list(encoder.parameters())))
-    print(len(list(decoder.parameters())))
-    # 
-    for batched_idx, batch_data in enumerate(loader):
+    # print(len(list(encoder.parameters())))
+    # print(len(list(decoder.parameters())))
+    # # 
+    # for batched_idx, batch_data in enumerate(loader):
         
-        cg, tg, assign_mat, caption_tokens, labels, caption = batch_data
+    #     cg, tg, assign_mat, caption_tokens, labels, caption = batch_data
 
-        cg = cg.to(DEVICE)
-        tg = tg.to(DEVICE)
-        # assign_mat = assign_mat.to(DEVICE)
-        caption_tokens = caption_tokens.to(DEVICE)
-        print(f"--------------Caption -----------")
-        print(caption)
-        print(len(caption))
-        print(f"--------------Caption -----------")
-        encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
-        encoder.zero_grad()    
-        decoder.zero_grad()
-        out = encoder(cg,tg,assign_mat)
-        print(f"Out shape is {out.shape}")
-        lstm_out = decoder(out,caption_tokens)
-        print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
-
-        max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
-        print(max_indices.shape)
-        print(max_indices[0])
-        #print(f"length {loader.dataset.vocab.idx2word[88]}")
-        for embed in max_indices:
-            sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
-            print(sentence)
-            print("\n")
-            print("-------------")
-            print("\n")
-        break
+    #     cg = cg.to(DEVICE)
+    #     tg = tg.to(DEVICE)
+    #     # assign_mat = assign_mat.to(DEVICE)
+    #     caption_tokens = caption_tokens.to(DEVICE)
+    #     print(f"--------------Caption -----------")
+    #     print(caption)
+    #     print(len(caption))
+    #     print(f"--------------Caption -----------")
+    #     encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+    #     encoder.zero_grad()    
+    #     decoder.zero_grad()
+    #     out = encoder(cg,tg,assign_mat)
+    #     print(f"Out shape is {out.shape}")
+    #     lstm_out = decoder(out,caption_tokens)
+    #     print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
+    #     break
+        # max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
+        # print(max_indices.shape)
+        # print(max_indices[0])
+        # #print(f"length {loader.dataset.vocab.idx2word[88]}")
+        # for embed in max_indices:
+        #     sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
+        #     print(sentence)
+        #     print("\n")
+        #     print("-------------")
+        #     print("\n")
+        # break
     
 
     

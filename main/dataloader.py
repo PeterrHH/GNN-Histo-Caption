@@ -62,7 +62,7 @@ class DiagnosticDataset(Dataset):
         # self.START_TOKEN = self.vocab.word2idx['<start>']
         self.END_TOKEN = self.vocab.word2idx['<end>']
         self.PAD_TOKEN = self.vocab.word2idx['<pad>'] # PAD_TOKEN is used for not supervison
-        self.max_length = 50
+        self.max_length = 90
         self.vocab_size = len(self.vocab.word2idx)
         self.num_feature = 6
         self.max_subseq_len = 15+1
@@ -77,13 +77,7 @@ class DiagnosticDataset(Dataset):
 
         self.get_captions_labels(self.img_path,self.split)
     
-    def graph_to_caption_mapping():
-        self.graph_list = []
-        if hasattr(self, 'num_tg'):
-            self.graph_list = self.list_tg_path
-        else:
-             self.graph_list = self.list_cg_path
-        
+
     '''
     Get the captions and the labels
     Input:
@@ -149,7 +143,7 @@ class DiagnosticDataset(Dataset):
 
         # print(f"CAPTION IS {sentences}")
         # print(f"\n")
-        for s, sentence in enumerate(sentences[:-1]):
+        for s, sentence in enumerate(sentences):
             #   if feature (except conclusion) is insufficient information, do not output it
             #   but the conclusion (last one) is insufficient information, we still output it
             if 'insufficient' in sentence and s < (len(sentences)-1): 
@@ -160,21 +154,15 @@ class DiagnosticDataset(Dataset):
             tmp = [self.vocab(token) for token in tokens]
             caption_tokens.append(tmp)
         #   Add Padding if necessary
-        # if len(caption_tokens) < self.max_length:
-        #     padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
-        #     caption_tokens = caption_tokens + padding
-        #print(f"Caption_tokens is {caption_tokens}")
-        load_tokens = np.ones((self.num_feature, self.max_subseq_len), np.int32) * self.PAD_TOKEN # 1 for end token
-        stop_indictor = np.ones(self.num_feature, np.int32) * self.PAD_TOKEN
-        assert(self.PAD_TOKEN == 0)
-        # sent_tokens length varies, so the rest is padded with -1
-        for j, tmp in enumerate(caption_tokens):
-                #print(f"At j = {j}, tmp is {tmp} caption at is len {len(load_tokens[j,:len(tmp)])}")
-                load_tokens[j,:len(tmp)]= tmp
-                stop_indictor[j] = 1 # continue indictor
-        #print(f"load_otken is {load_tokens}")
-        stop_indictor[j] = self.stop_label # stop indictor
-        caption = '. '.join(sentences[:-1]) + '.'
+        caption_tokens = [item for sublist in caption_tokens for item in sublist]
+        if len(caption_tokens) < self.max_length:
+            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
+            caption_tokens = caption_tokens + padding
+        # print(f"------------caption_tokens-----------------")
+        # print(caption_tokens)
+        # print(len(caption_tokens))
+        # print(f"------------caption_tokens-----------------")
+        caption = '. '.join(sentences) + '.'
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
             if self.load_in_ram:
@@ -197,7 +185,7 @@ class DiagnosticDataset(Dataset):
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
             #print(len(caption_tokens))
-            return cg,tg,assign_mat, torch.tensor(load_tokens).long(), label, caption
+            return cg,tg,assign_mat, torch.tensor(caption_tokens).long(), label, caption
         
         #   Use only tissue graph
         elif hasattr(self,'num_tg'):
@@ -207,7 +195,7 @@ class DiagnosticDataset(Dataset):
                 tg, _ = load_graphs(self.list_tg_path[index])
                 tg = tg[0]
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
-            return tg, assign_mat, torch.tensor(load_tokens).long(), label, caption
+            return tg, assign_mat, torch.tensor(caption_tokens).long(), label, caption
 
         #   Use only cell graph
         else:
@@ -220,9 +208,9 @@ class DiagnosticDataset(Dataset):
             return cg, assign_mat, torch.tensor(load_tokens).long(), label, caption
     
     
-    def __len__(self):
+    def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-        
+
         return len(self.cg)*5
 
 def collate(batch):
@@ -280,7 +268,8 @@ def make_dataloader(
     return dataloader
 
 if __name__ == "__main__":
-    
+    import os
+
     loader = make_dataloader(
         batch_size = 4,
         split = "test",
@@ -306,8 +295,17 @@ if __name__ == "__main__":
     for batch_idx, batch_data in enumerate(loader):
         # Your batch processing code here
         cg, tg, assign_mat, caption_tokens, label, caption = batch_data
-        caption_dict = {str(i + 1): value for i, value in enumerate(caption)}
-        print(f"Caption token shape is {caption_tokens.shape}")
+    
+        # for idx,value in enumerate(caption):
+        #     print(value)
+        #     print(caption_tokens[idx])
+        #     print("------------------------------")
+        # break
+    
+        # caption_dict = {str(i + 1): value for i, value in enumerate(caption)}
+        # print(caption_tokens)
+        # print(caption)
+        #print(caption_dict)
        #print(cg)
        # print(f"----------CG--------------")
         #print(tg.ndata['feat'])
