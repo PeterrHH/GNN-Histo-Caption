@@ -65,14 +65,14 @@ class GNNEncoder(nn.Module):
             self.selected_pool_method = self.pool_map[pool_method]
         self.cell_layer = nn.ModuleList()
         self.tissue_layer = nn.ModuleList()
-        for _ in range(1):
-            self.cell_layer.append(
-                nn.Sequential(
-                    GraphConv(514,514),
-                    GraphNorm(514),
-                    BatchNorm(514)
-                )
+        # for _ in range(3):
+        self.cell_layer.append(
+            nn.Sequential(
+                GraphConv(514,514),
+                GraphNorm(514),
+                BatchNorm(514)
             )
+        )
         for _ in range(3):
             self.tissue_layer.append(
                 nn.Sequential(
@@ -88,12 +88,13 @@ class GNNEncoder(nn.Module):
         # self.conv2 = GraphConv(514,514)
         # self.maxpool = MaxPooling()
  
-        # self.t_conv1 = GraphConv(514,514)
-        # self.gn = GraphNorm(514)
-        # self.bn = BatchNorm(514)
+        self.t_conv1 = GraphConv(1028,514)
+        self.gn = GraphNorm(514)
+        self.bn = BatchNorm(514)
         # self.conv2 = GraphConv(514,514)
         self.maxpool = MaxPooling()
         self.lin_out = nn.Linear(1028,256)
+
         '''
         Each Layer contains:
         - Message Passing
@@ -108,6 +109,8 @@ class GNNEncoder(nn.Module):
         Use the assignment matrix to agg the feats
         Retur the tissue graph feature
         """   
+        print(f"If there is Nan in CG FEAT {torch.any(torch.isnan(cg_feat))}")
+        print(f"If there is Nan in TG FEAT {torch.any(torch.isnan(tg_feat))}")
         num_nodes_per_graph = cell_graph.batch_num_nodes().tolist()
         num_nodes_per_graph.insert(0, 0)
         intervals = [sum(num_nodes_per_graph[:i + 1])
@@ -151,30 +154,51 @@ class GNNEncoder(nn.Module):
         tissue_edge = torch.stack(tissue_graph.edges())
         tissue_feat = tissue_graph.ndata['feat']
 
-        # for layer in self.cell_layer:
-        #     cell_feat = layer[0](cell_graph, cell_feat)
-        #     cell_feat = layer[1](cell_feat)
-        #     cell_feat = layer[2](cell_feat)
-        cell_feat = self.conv1(cell_graph,cell_feat)
-        cell_feat = self.gn(cell_feat)
-        cell_feat = self.bn(cell_feat)
-        x = self.readout(cell_graph,cell_feat)
-        x = self.cell_lin_out(x)
+        for layer in range(3):
+            cell_feat = self.cell_layer[0](cell_graph, cell_feat)
+            cell_feat = self.cell_layer[1](cell_feat)
+            cell_feat = self.cell_layer[2](cell_feat)
+        # cell_feat = self.conv1(cell_graph,cell_feat)
+        # cell_feat = self.gn(cell_feat)
+        # cell_feat = self.bn(cell_feat)
         # cell_feat = F.relu(cell_feat)
+        print(f"-----------After Layer---------")
+        # print(cell_feat)
+        print(f"-----------After Layer---------")
+        x = self.readout(cell_graph,cell_feat)
+        #print(f"BEFORE READOUT shape {cell_feat.shape} and AFTER IS {x.shape}")
+        # x = self.cell_lin_out(x)
+
         print("-------------cell_feat-------------")
-        print(cell_feat)
+        # print(cell_feat)
         print(f"Cell feat shape {cell_feat.shape}")
-        print(f"X shape {x.shape}")
+        print(f"If there is Nan in cell_feat {torch.any(torch.isnan(cell_feat))}")
+        # print(f"X shape {x.shape}")
         print("-------------cell_feat ------------")
-        # x = self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat)
+        print("------------- Assignment Sum ------------")
+        x = self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat)
+        print(f"If there is Nan in After Aggregation {torch.any(torch.isnan(x))}")
+        print("------------- Assignment Sum------------")
         # print(f"SUM TISSUE FEAT SHAPE {x.shape}")
-        # for layer in self.tissue_layer:
-        #     x = layer[0](tissue_graph,x)
-        #     x = layer[1](x)
-        #     x = layer[2](x)
+        for layer in self.tissue_layer:
+            x = layer[0](tissue_graph,x)
+            x = layer[1](x)
+            x = layer[2](x)
         # # x = F.relu(x)
-        # x = self.readout(tissue_graph,x)
+        print(f"If there is Nan After Tissue Layer {torch.any(torch.isnan(x))}")
+        x = self.readout(tissue_graph,x)
+        print(f"If there is Nan After readout {torch.any(torch.isnan(x))}")
         # x = self.lin_out(x)
+        if torch.any(torch.isnan(x)) == True:
+            pass
+            # print(f"_-------Linear Detail-------------")
+            # print("WEight \n")
+            # print(self.lin_out.weight)
+            # print("Bias \n")
+            # print(self.lin_out.bias)
+            # print(f"_-------Linear Detail-------------")
+            # print(x)
+        print(f"If there is Nan At Output {torch.any(torch.isnan(x))}")
         return x.unsqueeze(1)
     
 if __name__ == "__main__":

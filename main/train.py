@@ -118,18 +118,55 @@ def argparser():
 
     return parser
 
-def eval(eval_loader,encoder,decoder,device,epoch, batch_size, correct_cap ) :
+def embed2sentence(decode_output, loader, caption, pred_dict, cap_dict):
+    max_indices = torch.argmax(decode_output, dim=2) 
+    for idx,embed in enumerate(max_indices):
+        print(embed)
+        sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
+    if len(curr_dict.keys()) == 0:
+        #   Empty
+        pass
+    else:
+        pass
+
+    return curr_dict
+
+
+def eval(eval_loader,encoder,decoder,device, batch_size) :
     total_samples = len(eval_loader)
     total_step = math.ceil(total_samples / batch_size)
+    pred_dict = {}
+    cap_dict = {}
     for step in tqdm(range(total_step)):
-        cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(eval_dl))
-        caption_dict = {str(i + 1): value for i, value in enumerate(caption)}
-        cg = cg.to(DEVICE)
-        tg = tg.to(DEVICE)
-        encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+        cg, tg, assign_mat, caption_tokens, labels, captions = next(iter(eval_loader))
+        caption_dict = {str(i + 1): value for i, value in enumerate(captions)}
+        cg = cg.to( device)
+        tg = tg.to(device)
+        encoder , decoder = encoder.to(device) , decoder.to(device)
         with torch.no_grad():
             out = encoder(cg,tg,assign_mat)
             lstm_out = decoder(out,caption_tokens)
+        #   Evaluate
+        max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
+        # print(max_indices.shape)
+        # print(max_indices[0])
+        #print(f"length {loader.dataset.vocab.idx2word[88]}")
+        # print(max_indices)
+        #print(caption_dict)
+        for idx,embed in enumerate(max_indices):
+            print(embed)
+            sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
+
+            sentence = ' '.join(sentence.split()).replace("<pad>", "").replace("<end>", ".")
+            # caption_dict[str(idx+1)]
+            print(f"{sentence}")
+            print("!!!!! Correct!!!!!!")
+            captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
+            print(captions[idx])
+            print("\n")
+            print("-------------")
+            print("\n")
+        print()
 
 
 
@@ -174,16 +211,16 @@ def main():
     #     load_in_ram = True
     # )
 
-    # eval_dl = make_dataloader(
-    #     batch_size = args["batch_size"],
-    #     split = "eval",
-    #     base_data_path = args["dataset_path"],
-    #     graph_path = args["graph_path"],
-    #     vocab_path = args["vocab_path"],
-    #     shuffle=True,
-    #     num_workers=0,
-    #     load_in_ram = True
-    # )
+    eval_dl = make_dataloader(
+        batch_size = args["batch_size"],
+        split = "eval",
+        base_data_path = args["dataset_path"],
+        graph_path = args["graph_path"],
+        vocab_path = args["vocab_path"],
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
+    )
     #   Define Model, Loss and 
     vocab_size = len(train_dl.dataset.vocab)
     encoder = GNNEncoder(
@@ -199,7 +236,7 @@ def main():
 
     decoder = LSTMDecoder(
         vocab_size = vocab_size, 
-        embed_size = 256, 
+        embed_size = 1028, 
         hidden_size = 128,  
         batch_size= args["batch_size"], 
         device = DEVICE
@@ -213,6 +250,7 @@ def main():
     MAX_LENGTH = 100
     # model = GNN_LSTM(encoder, decoder,hidden_dim, vocab_size,gnn_param, lstm_param, phase)
     # model.to(DEVICE)
+    torch.autograd.set_detect_anomaly(True)
     if args["phase"] == "train":
         #   Model training
 
@@ -262,13 +300,14 @@ def main():
                 #print(f"LSTM OUT PREP type {type(lstm_out_prep)} and caption_prep {type(caption_prep)}")
                 loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
-                print(f"At epoch {epoch}, step {step} loss is {loss}")
+                print(f"At epoch {epoch}, step {step} loss is {loss} !!!!!!")
                 loss.backward()
+                nn.utils.clip_grad_norm_(all_params, 1.0)
                 optimizer.step()
                 print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
                 # print(cg.ndata['feat'])
+        eval(eval_dl,encoder,decoder,DEVICE,args["batch_size"])
 
-            break
     else:
         #   Only run the Test set
         print("test")

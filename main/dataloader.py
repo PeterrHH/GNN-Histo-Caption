@@ -149,6 +149,8 @@ class DiagnosticDataset(Dataset):
             if 'insufficient' in sentence and s < (len(sentences)-1): 
                 continue
             tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
+            #print(f"    At loop, sentence is {sentence}")
+            sentences[s] = sentence + ' <end>'
             #   tokens.append('<end>') # add stop indictor
             tokens.append('<end>')
             tmp = [self.vocab(token) for token in tokens]
@@ -162,7 +164,8 @@ class DiagnosticDataset(Dataset):
         # print(caption_tokens)
         # print(len(caption_tokens))
         # print(f"------------caption_tokens-----------------")
-        caption = '. '.join(sentences) + '.'
+        caption = ' '.join(sentences) + ''
+        # print(f"Caption is {caption} ---- and --- {sentences}")
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
             if self.load_in_ram:
@@ -180,7 +183,8 @@ class DiagnosticDataset(Dataset):
                 tg = tg[0]
                 assign_mat = h5_to_tensor(self.list_assign_path[graph_id]).float()
 
-
+            cg.ndata['feat'] = torch.nan_to_num(cg.ndata['feat'], nan=0.0)
+            tg.ndata['feat'] = torch.nan_to_num(tg.ndata['feat'], nan=0.0)
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
@@ -205,7 +209,7 @@ class DiagnosticDataset(Dataset):
                 cg, _ = load_graphs(self.list_cg_path[graph_id])
                 cg = cg[0]
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
-            return cg, assign_mat, torch.tensor(load_tokens).long(), label, caption
+            return cg, assign_mat, torch.tensor(caption_tokens).long(), label, caption
     
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
@@ -292,9 +296,9 @@ if __name__ == "__main__":
     # # print(f"idx is {idx} and data is {type(batch_data)} length {len(batch_data)}")
     # # for i in batch_data:
     # #     print(type(i))
-    for batch_idx, batch_data in enumerate(loader):
-        # Your batch processing code here
-        cg, tg, assign_mat, caption_tokens, label, caption = batch_data
+    # for batch_idx, batch_data in enumerate(loader):
+    #     # Your batch processing code here
+    #     cg, tg, assign_mat, caption_tokens, label, caption = batch_data
     
         # for idx,value in enumerate(caption):
         #     print(value)
@@ -338,4 +342,7 @@ if __name__ == "__main__":
     # print(a[3])
     # print("-------------------")
     # print(a[4])
-    # print(len(loader.dataset.vocab))
+    print(loader.dataset.vocab)
+
+    for word, idx in loader.dataset.vocab.word2idx.items():
+        print(f"Word: {word}, Index: {idx}")
