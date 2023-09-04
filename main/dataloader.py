@@ -164,7 +164,6 @@ class DiagnosticDataset(Dataset):
         cap_id_in_img = index % 5
         graph_id = int(index / 5)
         label = self.labels[graph_id]
-        print(f"graph id is {graph_id} and split is ")
         if self.split == "train":
             caption = self.captions[graph_id][cap_id_in_img]
             caption_tokens, caption = self.get_cap_and_token(caption)

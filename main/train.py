@@ -175,7 +175,7 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
     print(f"total step is {total_step}")
     scorer = Scorer(pred_dict,cap_dict)
     scores = scorer.compute_scores()
-    print(scores)
+    return scores
        # max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
         # print(max_indices.shape)
         # print(max_indices[0])
@@ -197,7 +197,13 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
         #     print("\n")
 
 
-
+def unpack_score(scores):
+    bleu = scores[0]
+    meteor = scores[1]
+    rouge = scores[2]
+    cider = scores[3]
+    spice = scores[4]
+    return bleu[0], bleu[1], bleu[2], bleu[3], meteor, rouge, cider, spice
 
 def main():
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -229,19 +235,19 @@ def main():
         load_in_ram = True
     )
 
-    # test_dl = make_dataloader(
-    #     batch_size = args["batch_size"],
-    #     split = "test",
-    #     base_data_path = args["dataset_path"],
-    #     graph_path = args["graph_path"],
-    #     vocab_path = args["vocab_path"],
-    #     shuffle=True,
-    #     num_workers=0,
-    #     load_in_ram = True
-    # )
+    test_dl = make_dataloader(
+        batch_size = 1000, # there are 1000
+        split = "test",
+        base_data_path = args["dataset_path"],
+        graph_path = args["graph_path"],
+        vocab_path = args["vocab_path"],
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True
+    )
 
     eval_dl = make_dataloader(
-        batch_size = args["batch_size"],
+        batch_size = 889, # there are 889 in test set
         split = "eval",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
@@ -299,10 +305,10 @@ def main():
         
         print(f"Number of steps per epoch: {total_step}")
         print(type(train_dl))
-        for epoch in range(args["epochs"]):
+        for epoch in tqdm(range(args["epochs"])):
             total_loss = 0.0
             # for batched_idx, batch_data in enumerate(tqdm(train_dl)):
-            for step in range(total_step):
+            for step in tqdm(range(total_step)):
                 #if args["graph_model_type"] == "Hierarchical":
                 cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(train_dl))
 
@@ -315,7 +321,6 @@ def main():
                 decoder.zero_grad()
                 # print(f"Input shape is {cg}")
                 out = encoder(cg,tg,assign_mat) # (batch_size, 1, embedding)
-                print(f"Output shape of the encoder {out.shape}")
                 #print(f"Out shape is {out.shape}")
                 # print(out)
                 # print(f"------out--------")
@@ -329,13 +334,24 @@ def main():
                 #print(f"LSTM OUT PREP type {type(lstm_out_prep)} and caption_prep {type(caption_prep)}")
                 loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
-                print(f"At epoch {epoch}, step {step} loss is {loss} !!!!!!")
+                print(f"\nAt epoch {epoch}, step {step} Cross Entropy Loss is {loss} !!!!!!")
                 loss.backward()
                 nn.utils.clip_grad_norm_(all_params, 1.0)
                 optimizer.step()
-                print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
+                #print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
                 # print(cg.ndata['feat'])
-        eval(eval_dl,encoder,decoder,DEVICE,args["batch_size"])
+        scores = eval(eval_dl,encoder,decoder,DEVICE,889)
+        bleu1, bleu2, bleu2, bleu4, meteor, rouge, cider, spice = unpack_score(scores)
+        wandb.log({
+            'bleu1':bleu1,
+            'bleu2':bleu2,
+            'bleu3':bleu3,
+            'bleu4':bleu4,
+            'meteor':meteor,
+            'rouge':rouge,
+            'cider':cider,
+            'spice':spice
+        })
 
     else:
         #   Only run the Test set

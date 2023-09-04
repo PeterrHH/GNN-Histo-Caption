@@ -28,9 +28,9 @@ class LSTMDecoder(nn.Module):
         # decoded_output, _ = self.decoder(encoded_output)
         # return decoded_output
        # print(f"IN LSTM, the feature size is {features.shape}")
-        print("-------------LSTM--------------")
-        print(f"If there is Nan for Features {torch.any(torch.isnan(features))}")
-        print(f"If there is Nan in for Captions {torch.any(torch.isnan(captions))}")
+        # print("-------------LSTM--------------")
+        # print(f"If there is Nan for Features {torch.any(torch.isnan(features))}")
+        # print(f"If there is Nan in for Captions {torch.any(torch.isnan(captions))}")
 
         if self.batch_size != features.shape[0]:
             self.batch_size = features.shape[0] 
@@ -40,16 +40,16 @@ class LSTMDecoder(nn.Module):
        # print(f"Cell shape is {c_0.shape}")
         #print(f'caption have shape {captions.shape}')
         embeds = self.word_embedding( captions)
-        print(f"If there is Nan in for Caption Embedding {torch.any(torch.isnan(embeds))}")
+        #print(f"If there is Nan in for Caption Embedding {torch.any(torch.isnan(embeds))}")
         #print(f"Hidden shape is {h_0.shape}")
         #print(f"word embedding shape {embeds.shape} and features shape is {features.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1  ) 
-        print(f"If there is Nan in for LSTM input {torch.any(torch.isnan(inputs))} and h0 {torch.any(torch.isnan(h_0))} c0 {torch.any(torch.isnan(c_0))}")
+        #print(f"If there is Nan in for LSTM input {torch.any(torch.isnan(inputs))} and h0 {torch.any(torch.isnan(h_0))} c0 {torch.any(torch.isnan(c_0))}")
         embeddings,_ = self.lstm(inputs,(h_0,c_0))
-        print(f"If there is Nan in for Caption Embedding After LSTM {torch.any(torch.isnan(embeddings))}")
+        #print(f"If there is Nan in for Caption Embedding After LSTM {torch.any(torch.isnan(embeddings))}")
         outputs = self.linear(self.dropout(embeddings))
-        print(f"If there is Nan in for LSTM OUTPUT {torch.any(torch.isnan(outputs))}")
-        print("-------------LSTM--------------")
+        #print(f"If there is Nan in for LSTM OUTPUT {torch.any(torch.isnan(outputs))}")
+        #print("-------------LSTM--------------")
         return outputs
 
     # def init_hidden(self):
