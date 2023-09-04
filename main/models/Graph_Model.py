@@ -154,10 +154,10 @@ class GNNEncoder(nn.Module):
         tissue_edge = torch.stack(tissue_graph.edges())
         tissue_feat = tissue_graph.ndata['feat']
 
-        for layer in range(3):
-            cell_feat = self.cell_layer[0](cell_graph, cell_feat)
-            cell_feat = self.cell_layer[1](cell_feat)
-            cell_feat = self.cell_layer[2](cell_feat)
+        for layer in self.cell_layer:
+            cell_feat = layer[0](cell_graph, cell_feat)
+            cell_feat = layer[1](cell_feat)
+            cell_feat = layer[2](cell_feat)
         # cell_feat = self.conv1(cell_graph,cell_feat)
         # cell_feat = self.gn(cell_feat)
         # cell_feat = self.bn(cell_feat)

@@ -133,38 +133,42 @@ class DiagnosticDataset(Dataset):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
         cap_id_in_img = index % 5
         graph_id = int(index / 5)
-        #   print(f"At index {index}, grpah_id is {graph_id} Size of Captions {len(self.captions)}")
-        caption = self.captions[graph_id][cap_id_in_img]
+       
+        if self.split == "train":
+            caption = self.captions[graph_id][cap_id_in_img]
+            label = self.labels[graph_id]
+            #   Process cations and labels
+            sentences = caption.rstrip('.').replace(',','').split('. ')
+            caption_tokens = [] # convert to tokens for all num_feature sentences
 
-        label = self.labels[graph_id]
-        #   Process cations and labels
-        sentences = caption.rstrip('.').replace(',','').split('. ')
-        caption_tokens = [] # convert to tokens for all num_feature sentences
-
-        # print(f"CAPTION IS {sentences}")
-        # print(f"\n")
-        for s, sentence in enumerate(sentences):
-            #   if feature (except conclusion) is insufficient information, do not output it
-            #   but the conclusion (last one) is insufficient information, we still output it
-            if 'insufficient' in sentence and s < (len(sentences)-1): 
-                continue
-            tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
-            #print(f"    At loop, sentence is {sentence}")
-            sentences[s] = sentence + ' <end>'
-            #   tokens.append('<end>') # add stop indictor
-            tokens.append('<end>')
-            tmp = [self.vocab(token) for token in tokens]
-            caption_tokens.append(tmp)
-        #   Add Padding if necessary
-        caption_tokens = [item for sublist in caption_tokens for item in sublist]
-        if len(caption_tokens) < self.max_length:
-            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
-            caption_tokens = caption_tokens + padding
-        # print(f"------------caption_tokens-----------------")
-        # print(caption_tokens)
-        # print(len(caption_tokens))
-        # print(f"------------caption_tokens-----------------")
-        caption = ' '.join(sentences) + ''
+            # print(f"CAPTION IS {sentences}")
+            # print(f"\n")
+            for s, sentence in enumerate(sentences):
+                #   if feature (except conclusion) is insufficient information, do not output it
+                #   but the conclusion (last one) is insufficient information, we still output it
+                if 'insufficient' in sentence and s < (len(sentences)-1): 
+                    continue
+                tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
+                #print(f"    At loop, sentence is {sentence}")
+                sentences[s] = sentence + ' <end>'
+                #   tokens.append('<end>') # add stop indictor
+                tokens.append('<end>')
+                tmp = [self.vocab(token) for token in tokens]
+                caption_tokens.append(tmp)
+            #   Add Padding if necessary
+            caption_tokens = [item for sublist in caption_tokens for item in sublist]
+            if len(caption_tokens) < self.max_length:
+                padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
+                caption_tokens = caption_tokens + padding
+            # print(f"------------caption_tokens-----------------")
+            # print(caption_tokens)
+            # print(len(caption_tokens))
+            # print(f"------------caption_tokens-----------------")
+            caption = ' '.join(sentences) + ''
+        elif  self.split = "test":
+            pass
+           
+            
         # print(f"Caption is {caption} ---- and --- {sentences}")
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):

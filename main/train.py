@@ -118,18 +118,32 @@ def argparser():
 
     return parser
 
-def embed2sentence(decode_output, loader, caption, pred_dict, cap_dict):
+def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
     max_indices = torch.argmax(decode_output, dim=2) 
+
+    assert len(pred_dict) == len(cap_dict)
+
     for idx,embed in enumerate(max_indices):
         print(embed)
-        sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
-    if len(curr_dict.keys()) == 0:
-        #   Empty
-        pass
-    else:
-        pass
+        sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
+        sentence = sentence.replace("<pad>","")
+        sentence = ' '.join(sentence.split()).replace("<end>", ".")
+        print(f"{sentence}")
+        print("\n")
+        print(f"------------------CORRECT BELOW----------------")
+        captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
+        print(f"{captions[idx]}")
+        print("\n")
+        if len(pred_dict.keys()) == 0:
+            #   Empty
+            pred_dict["1"] = sentence
+            cap_dict["1"] = captions
+            pass
+        else:
+            pred_dict[str(len(pred_dict)+1)] = sentence
+            cap_dict[str(len(pred_dict)+1)] = captions[idx]
 
-    return curr_dict
+    return pred_dict,cap_dict
 
 
 def eval(eval_loader,encoder,decoder,device, batch_size) :
@@ -139,7 +153,7 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
     cap_dict = {}
     for step in tqdm(range(total_step)):
         cg, tg, assign_mat, caption_tokens, labels, captions = next(iter(eval_loader))
-        caption_dict = {str(i + 1): value for i, value in enumerate(captions)}
+        # caption_dict = {str(i + 1): value for i, value in enumerate(captions)}
         cg = cg.to( device)
         tg = tg.to(device)
         encoder , decoder = encoder.to(device) , decoder.to(device)
@@ -147,26 +161,30 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
             out = encoder(cg,tg,assign_mat)
             lstm_out = decoder(out,caption_tokens)
         #   Evaluate
-        max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
+        pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
+    print(len(pred_dict))
+    print(len(cap_dict))
+    print(f"total step is {total_step}")
+       # max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
         # print(max_indices.shape)
         # print(max_indices[0])
         #print(f"length {loader.dataset.vocab.idx2word[88]}")
         # print(max_indices)
         #print(caption_dict)
-        for idx,embed in enumerate(max_indices):
-            print(embed)
-            sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
+        # for idx,embed in enumerate(max_indices):
+        #     print(embed)
+        #     sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
 
-            sentence = ' '.join(sentence.split()).replace("<pad>", "").replace("<end>", ".")
-            # caption_dict[str(idx+1)]
-            print(f"{sentence}")
-            print("!!!!! Correct!!!!!!")
-            captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
-            print(captions[idx])
-            print("\n")
-            print("-------------")
-            print("\n")
-        print()
+        #     sentence = ' '.join(sentence.split()).replace("<pad>", "").replace("<end>", ".")
+        #     # caption_dict[str(idx+1)]
+        #     print(f"{sentence}")
+        #     print("!!!!! Correct!!!!!!")
+        #     captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
+        #     print(captions[idx])
+        #     print("\n")
+        #     print("-------------")
+        #     print("\n")
+
 
 
 
@@ -224,8 +242,8 @@ def main():
     #   Define Model, Loss and 
     vocab_size = len(train_dl.dataset.vocab)
     encoder = GNNEncoder(
-        cell_conv_method = "GCN", 
-        tissue_conv_method = "GCN", 
+        cell_conv_method = args["gnn_param"]["cell_conv_method"], 
+        tissue_conv_method = args["gnn_param"]["tissue_conv_method"], 
         pool_method = None, 
         num_layers = 3, 
         aggregate_method = "sum", 
