@@ -128,46 +128,58 @@ class DiagnosticDataset(Dataset):
                 h5_to_tensor(single_assign_path).float()
                     for single_assign_path in self.list_assign_path
             ]
-    
+    def get_cap_and_token(self, caption):
+ #   Process cations and labels
+        sentences = caption.rstrip('.').replace(',','').split('. ')
+        caption_tokens = [] # convert to tokens for all num_feature sentences
+
+        # print(f"CAPTION IS {sentences}")
+        # print(f"\n")
+        for s, sentence in enumerate(sentences):
+            #   if feature (except conclusion) is insufficient information, do not output it
+            #   but the conclusion (last one) is insufficient information, we still output it
+            if 'insufficient' in sentence and s < (len(sentences)-1): 
+                continue
+            tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
+            #print(f"    At loop, sentence is {sentence}")
+            sentences[s] = sentence + ' <end>'
+            #   tokens.append('<end>') # add stop indictor
+            tokens.append('<end>')
+            tmp = [self.vocab(token) for token in tokens]
+            caption_tokens.append(tmp)
+        #   Add Padding if necessary
+        caption_tokens = [item for sublist in caption_tokens for item in sublist]
+        if len(caption_tokens) < self.max_length:
+            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
+            caption_tokens = caption_tokens + padding
+        # print(f"------------caption_tokens-----------------")
+        # print(caption_tokens)
+        # print(len(caption_tokens))
+        # print(f"------------caption_tokens-----------------")
+        caption = ' '.join(sentences) + ''
+        return caption_tokens, caption
+
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
         cap_id_in_img = index % 5
         graph_id = int(index / 5)
-       
+        label = self.labels[graph_id]
+        print(f"graph id is {graph_id} and split is ")
         if self.split == "train":
             caption = self.captions[graph_id][cap_id_in_img]
-            label = self.labels[graph_id]
-            #   Process cations and labels
-            sentences = caption.rstrip('.').replace(',','').split('. ')
-            caption_tokens = [] # convert to tokens for all num_feature sentences
+            caption_tokens, caption = self.get_cap_and_token(caption)
+        else :
+            unclean_captions = self.captions[graph_id]
+            caption = []
+            print(f'--------------Unclean Cap--------')
+            print(unclean_captions)
+            print(f'--------------Unclean Cap--------')
+            for i in unclean_captions:
+                print(f"i is {i}")
+                caption_tokens , cap = self.get_cap_and_token(i)
+                caption.append(cap)
 
-            # print(f"CAPTION IS {sentences}")
-            # print(f"\n")
-            for s, sentence in enumerate(sentences):
-                #   if feature (except conclusion) is insufficient information, do not output it
-                #   but the conclusion (last one) is insufficient information, we still output it
-                if 'insufficient' in sentence and s < (len(sentences)-1): 
-                    continue
-                tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
-                #print(f"    At loop, sentence is {sentence}")
-                sentences[s] = sentence + ' <end>'
-                #   tokens.append('<end>') # add stop indictor
-                tokens.append('<end>')
-                tmp = [self.vocab(token) for token in tokens]
-                caption_tokens.append(tmp)
-            #   Add Padding if necessary
-            caption_tokens = [item for sublist in caption_tokens for item in sublist]
-            if len(caption_tokens) < self.max_length:
-                padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
-                caption_tokens = caption_tokens + padding
-            # print(f"------------caption_tokens-----------------")
-            # print(caption_tokens)
-            # print(len(caption_tokens))
-            # print(f"------------caption_tokens-----------------")
-            caption = ' '.join(sentences) + ''
-        elif  self.split = "test":
-            pass
-           
+                
             
         # print(f"Caption is {caption} ---- and --- {sentences}")
         # 1. Hierarchical Graphs
@@ -218,8 +230,10 @@ class DiagnosticDataset(Dataset):
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-
-        return len(self.cg)*5
+        if self.split == "train":
+            return len(self.cg)*5
+        else :
+            return len(self.cg)
 
 def collate(batch):
     """

@@ -123,25 +123,32 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
 
     assert len(pred_dict) == len(cap_dict)
 
+
+    for i,caption in enumerate(captions):
+        for sent_i,sent_cap in enumerate(caption):
+            captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".")
+
     for idx,embed in enumerate(max_indices):
-        print(embed)
+        #print(embed)
         sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
         sentence = sentence.replace("<pad>","")
         sentence = ' '.join(sentence.split()).replace("<end>", ".")
         print(f"{sentence}")
         print("\n")
-        print(f"------------------CORRECT BELOW----------------")
-        captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
-        print(f"{captions[idx]}")
+        print("-----------------CORRECT SETNENCE---------")
+        print(captions[idx])
         print("\n")
+        # for caption in enumerate(captions:
+
+
         if len(pred_dict.keys()) == 0:
             #   Empty
-            pred_dict["1"] = sentence
-            cap_dict["1"] = captions
+            pred_dict["1"] = [sentence]
+            cap_dict["1"] = captions[idx]
             pass
         else:
-            pred_dict[str(len(pred_dict)+1)] = sentence
-            cap_dict[str(len(pred_dict)+1)] = captions[idx]
+            pred_dict[str(len(pred_dict)+1)] = [sentence]
+            cap_dict[str(len(cap_dict)+1)] = captions[idx]
 
     return pred_dict,cap_dict
 
@@ -162,9 +169,13 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
             lstm_out = decoder(out,caption_tokens)
         #   Evaluate
         pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
-    print(len(pred_dict))
-    print(len(cap_dict))
+    print(pred_dict)
+    print("\n")
+    print(cap_dict)
     print(f"total step is {total_step}")
+    scorer = Scorer(pred_dict,cap_dict)
+    scores = scorer.compute_scores()
+    print(scores)
        # max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
         # print(max_indices.shape)
         # print(max_indices[0])
@@ -209,7 +220,7 @@ def main():
     #   !!!!!!!!!!! Change it back to train
     train_dl = make_dataloader(
         batch_size = args["batch_size"],
-        split = "test",
+        split = "train",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
         vocab_path = args["vocab_path"],
