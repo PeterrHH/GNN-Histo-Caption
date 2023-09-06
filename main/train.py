@@ -309,11 +309,13 @@ def main():
         #   set the wandb project where this run will be logged
         wandb.init(
             project="GNN simplifcation and application in histopathology image captioning",
+            name = "GCN-LSTM tiral",
             #   track hyperparameters and run metadata
             config={
-                "architecture": "GNN-LSTM",
+                "architecture": "GCN-LSTM",
                 "dataset": "Nmi-Wsi-Diagnosis",
-                "epoch": args["epochs"]
+                "epoch": args["epochs"],
+                "batch_size": args["batch_size"]
             }
         )
         total_samples = len(train_dl)
@@ -323,7 +325,7 @@ def main():
         print(f"Number of steps per epoch: {total_step}")
         print(type(train_dl))
         for epoch in tqdm(range(args["epochs"])):
-            total_loss = 0.0
+            total_loss = []
             # for batched_idx, batch_data in enumerate(tqdm(train_dl)):
             for step in range(total_step):
                 #if args["graph_model_type"] == "Hierarchical":
@@ -344,7 +346,6 @@ def main():
                 lstm_out = decoder(out,caption_tokens)
                 #print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
             #   At the end, run eval set  
-                #wandb.log({"loss":loss})
                 lstm_out_prep = lstm_out.view(-1, vocab_size)
                 caption_prep = caption_tokens.view(-1) 
                 #print(f"LSTM view shape {lstm_out.view(-1, vocab_size).shape} and cap_tok {caption_tokens.view(-1).shape}")
@@ -355,20 +356,38 @@ def main():
                 loss.backward()
                 nn.utils.clip_grad_norm_(all_params, 1.0)
                 optimizer.step()
+                total_loss.append(loss.item())
                 #print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
                 # print(cg.ndata['feat'])
-        scores = eval(eval_dl,encoder,decoder,DEVICE,889)
-        bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider, spice = unpack_score(scores)
-        wandb.log({
-            'bleu1':bleu1,
-            'bleu2':bleu2,
-            'bleu3':bleu3,
-            'bleu4':bleu4,
-            'meteor':meteor,
-            'rouge':rouge,
-            'cider':cider,
-            'spice':spice
-        })
+            mean_loss = np.mean(total_loss)
+            scores = eval(eval_dl,encoder,decoder,DEVICE,889)
+            bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider, spice = unpack_score(scores)
+            wandb.log({
+                'loss':mean_loss,
+                'bleu1':bleu1,
+                'bleu2':bleu2,
+                'bleu3':bleu3,
+                'bleu4':bleu4,
+                'meteor':meteor,
+                'rouge':rouge,
+                'cider':cider,
+                'spice':spice
+            })
+        test_scores = eval(test_dl,encoder,decoder, DEVICE, 1000)
+        bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider, spice = unpack_score(test_scores)
+        test_output = {
+                'bleu1':bleu1,
+                'bleu2':bleu2,
+                'bleu3':bleu3,
+                'bleu4':bleu4,
+                'meteor':meteor,
+                'rouge':rouge,
+                'cider':cider,
+                'spice':spice
+            }
+        print("Testing data output: ")
+        print(test_output)
+
 
     else:
         #   Only run the Test set
