@@ -5,7 +5,7 @@ output_path: "output"
 vocab_path: "../../Report-nmi-wsi/vocab_bladderreport.pkl"
 learning_rate: 0.001
 phase: train # train, test, eval
-epochs: 3
+epochs: 1
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 batch_size: 64
 

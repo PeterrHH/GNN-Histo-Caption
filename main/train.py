@@ -133,11 +133,11 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
         sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
         sentence = sentence.replace("<pad>","")
         sentence = ' '.join(sentence.split()).replace("<end>", ".")
-        print(f"{sentence}")
-        print("\n")
-        print("-----------------CORRECT SETNENCE---------")
-        print(captions[idx])
-        print("\n")
+        # print(f"{sentence}")
+        # print("\n")
+        # print("-----------------CORRECT SETNENCE---------")
+        # print(captions[idx])
+        # print("\n")
         # for caption in enumerate(captions:
 
 
@@ -176,26 +176,43 @@ def eval(eval_loader,encoder,decoder,device, batch_size) :
     scorer = Scorer(pred_dict,cap_dict)
     scores = scorer.compute_scores()
     return scores
-       # max_indices = torch.argmax(lstm_out, dim=2)  # Shape: (batch_size, position)
-        # print(max_indices.shape)
-        # print(max_indices[0])
-        #print(f"length {loader.dataset.vocab.idx2word[88]}")
-        # print(max_indices)
-        #print(caption_dict)
-        # for idx,embed in enumerate(max_indices):
-        #     print(embed)
-        #     sentence = " ".join([eval_loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
 
-        #     sentence = ' '.join(sentence.split()).replace("<pad>", "").replace("<end>", ".")
-        #     # caption_dict[str(idx+1)]
-        #     print(f"{sentence}")
-        #     print("!!!!! Correct!!!!!!")
-        #     captions[idx] = ' '.join(captions[idx].split()).replace("<pad>", "").replace("<end>", ".")
-        #     print(captions[idx])
-        #     print("\n")
-        #     print("-------------")
-        #     print("\n")
-
+def save_model(epoch, encoder, encoder_path,decoder, decoder_path, optimizer):
+    torch.save(encoder.state_dict(), encoder_path)
+    torch.save(decoder.state_dict(), decoder_path)
+    pass
+def load_model(encoder_path, decoder_path,vocab_size,args,device):
+    encoder = GNNEncoder(
+        cell_conv_method = args["gnn_param"]["cell_conv_method"], 
+        tissue_conv_method = args["gnn_param"]["tissue_conv_method"], 
+        pool_method = None, 
+        num_layers = 3, 
+        aggregate_method = "sum", 
+        input_feat = 514,
+        output_size = 256
+    )
+    decoder = LSTMDecoder(
+        vocab_size = vocab_size, 
+        embed_size = 1028, 
+        hidden_size = 128,  
+        batch_size= args["batch_size"], 
+        device = device
+    )
+    if os.path.exist(encoder_path):
+        # load
+        encoder.load(torch.load(encoder_path))
+        pass
+    else:
+        raise Exception(f"Encoder path {encoder_path} not exist")
+    
+    
+    if os.path.exist(decoder_path):
+        # load
+        decoder.load(torch.load(decoder_path))
+    else:
+        raise Exception(f"Encoder path {decoder_path} not exist")
+    
+    return encoder, decoder
 
 def unpack_score(scores):
     bleu = scores[0]
@@ -290,15 +307,15 @@ def main():
         #   Model training
 
         #   set the wandb project where this run will be logged
-        # wandb.init(
-        #     project="GNN simplifcation and application in histopathology image captioning",
-        #     #   track hyperparameters and run metadata
-        #     config={
-        #         "architecture": "GNN-LSTM",
-        #         "dataset": "Nmi-Wsi-Diagnosis",
-        #         "epoch": args["epochs"]
-        #     }
-        # )
+        wandb.init(
+            project="GNN simplifcation and application in histopathology image captioning",
+            #   track hyperparameters and run metadata
+            config={
+                "architecture": "GNN-LSTM",
+                "dataset": "Nmi-Wsi-Diagnosis",
+                "epoch": args["epochs"]
+            }
+        )
         total_samples = len(train_dl)
         batch_size = 4
         total_step = math.ceil(total_samples / batch_size)
@@ -308,7 +325,7 @@ def main():
         for epoch in tqdm(range(args["epochs"])):
             total_loss = 0.0
             # for batched_idx, batch_data in enumerate(tqdm(train_dl)):
-            for step in tqdm(range(total_step)):
+            for step in range(total_step):
                 #if args["graph_model_type"] == "Hierarchical":
                 cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(train_dl))
 
@@ -334,14 +351,14 @@ def main():
                 #print(f"LSTM OUT PREP type {type(lstm_out_prep)} and caption_prep {type(caption_prep)}")
                 loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
-                print(f"\nAt epoch {epoch}, step {step} Cross Entropy Loss is {loss} !!!!!!")
+                print(f"At epoch [{epoch+1}/{args['epochs']}], step [{step}/{total_step}]  Loss is {loss}")
                 loss.backward()
                 nn.utils.clip_grad_norm_(all_params, 1.0)
                 optimizer.step()
                 #print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
                 # print(cg.ndata['feat'])
         scores = eval(eval_dl,encoder,decoder,DEVICE,889)
-        bleu1, bleu2, bleu2, bleu4, meteor, rouge, cider, spice = unpack_score(scores)
+        bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider, spice = unpack_score(scores)
         wandb.log({
             'bleu1':bleu1,
             'bleu2':bleu2,

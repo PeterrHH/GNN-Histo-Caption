@@ -170,9 +170,6 @@ class DiagnosticDataset(Dataset):
         else :
             unclean_captions = self.captions[graph_id]
             caption = []
-            print(f'--------------Unclean Cap--------')
-            print(unclean_captions)
-            print(f'--------------Unclean Cap--------')
             for i in unclean_captions:
                 print(f"i is {i}")
                 caption_tokens , cap = self.get_cap_and_token(i)
