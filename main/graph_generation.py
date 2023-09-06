@@ -203,77 +203,77 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../Report-nmi-wsi"
+    folder = "../../Report-nmi-wsi" # ../../../../../../srv/scratch/bic/peter/Report-nmi-wsi/Images
     target = "./target_img/target.png"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
     GB.build(folder,"graph","test")
-    # GB.build(folder,"graph","train")
-    # GB.build(folder,"graph","eval")
+    GB.build(folder,"graph","train")
+    GB.build(folder,"graph","eval")
     # ne = NucleiExtractor()
     
-#     # Graph are bin file, Assignment mat is h5 file
-#     import os
-# #     file_path = "abc/edf.h5"
-# #     file_name = os.path.basename(file_path)
-# #     print(file_name)
-# #     name_without_extension = os.path.splitext(os.path.basename(file_path))[0]
+    # Graph are bin file, Assignment mat is h5 file
+    import os
+#     file_path = "abc/edf.h5"
+#     file_name = os.path.basename(file_path)
+#     print(file_name)
+#     name_without_extension = os.path.splitext(os.path.basename(file_path))[0]
 
-# #     print(name_without_extension)  
-#     base = "graph"
-#     splits = ['train', 'test', 'eval']
-#     specifics = ['cell_graphs','tissue_graphs','assignment_mat']
+#     print(name_without_extension)  
+    base = "graph"
+    splits = ['train', 'test', 'eval']
+    specifics = ['cell_graphs','tissue_graphs','assignment_mat']
     
-#     lowest_dict = {'train':None,
-#                   'test':None,
-#                   'eval':None}
+    lowest_dict = {'train':None,
+                  'test':None,
+                  'eval':None}
 
-#     for specific in specifics:
-#         for split in splits:
-#             folder = os.path.join(base,specific,split)
-#             if os.path.exists(folder) and os.path.isdir(folder):
-#                 all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
-#                 #print(all_file[0:2])
-#                 file_count = len(all_file)
-#                 if lowest_dict[split] == None:
-#                     lowest_dict[split] = all_file
-#                 elif len(lowest_dict[split]) < file_count:
-#                     elements_not_in_lowest = [element for element in all_file if element not in lowest_dict[split]]
-#                     #print(f"LOW STILL LOW. For split = {split}, low dict have size {len(lowest_dict[split])}, curr have size {file_count},element not in lowest have count {len(elements_not_in_lowest)}") 
-#                 else:
-#                     elements_not_in_lowest = [element for element in lowest_dict[split] if element not in all_file]
-#                     #print(f"LOW NEW. For split = {split}, prev lowest dict have size {len(lowest_dict[split])}, curr have size {file_count},element not in lowest have count {len(elements_not_in_lowest)}") 
-#                 print(f"Number of files in {folder}: {file_count} at split {split}")
-#             else:
-#                 print(f"{folder} does not exist or is not a directory.")
-#     print(f"Start deleting")
-#     for specific in specifics:
-#         for split in splits:
-#             folder = os.path.join(base,specific,split)
-#             all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
-#             if len(all_file) > len(lowest_dict[split]):
-#                 # remove additional files
-#                 additional = [element for element in all_file if element not in lowest_dict[split]]
-#                 for i in additional:
-#                     # join the file name back
-#                     if specific == "assignment_mat":
-#                         pass
-#                         file_name = os.path.join(base,specific,split,i+'.h5')
-#                     else:
-#                         file_name = os.path.join(base,specific,split,i+'.bin')
-#                     os.remove(file_name)
+    for specific in specifics:
+        for split in splits:
+            folder = os.path.join(base,specific,split)
+            if os.path.exists(folder) and os.path.isdir(folder):
+                all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+                #print(all_file[0:2])
+                file_count = len(all_file)
+                if lowest_dict[split] == None:
+                    lowest_dict[split] = all_file
+                elif len(lowest_dict[split]) < file_count:
+                    elements_not_in_lowest = [element for element in all_file if element not in lowest_dict[split]]
+                    #print(f"LOW STILL LOW. For split = {split}, low dict have size {len(lowest_dict[split])}, curr have size {file_count},element not in lowest have count {len(elements_not_in_lowest)}") 
+                else:
+                    elements_not_in_lowest = [element for element in lowest_dict[split] if element not in all_file]
+                    #print(f"LOW NEW. For split = {split}, prev lowest dict have size {len(lowest_dict[split])}, curr have size {file_count},element not in lowest have count {len(elements_not_in_lowest)}") 
+                print(f"Number of files in {folder}: {file_count} at split {split}")
+            else:
+                print(f"{folder} does not exist or is not a directory.")
+    print(f"Start deleting")
+    for specific in specifics:
+        for split in splits:
+            folder = os.path.join(base,specific,split)
+            all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+            if len(all_file) > len(lowest_dict[split]):
+                # remove additional files
+                additional = [element for element in all_file if element not in lowest_dict[split]]
+                for i in additional:
+                    # join the file name back
+                    if specific == "assignment_mat":
+                        pass
+                        file_name = os.path.join(base,specific,split,i+'.h5')
+                    else:
+                        file_name = os.path.join(base,specific,split,i+'.bin')
+                    os.remove(file_name)
     
-#     # finally check the results
-#     for specific in specifics:
-#         for split in splits:
-#             folder = os.path.join(base,specific,split)
-#             if os.path.exists(folder) and os.path.isdir(folder):
-#                 all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
-#                 #print(all_file[0:2])
-#                 file_count = len(all_file)
-#                 print(f"Number of files in {folder}: {file_count} at split {split}")
-#             else:
-#                 print(f"{folder} does not exist or is not a directory.")
+    # finally check the results
+    for specific in specifics:
+        for split in splits:
+            folder = os.path.join(base,specific,split)
+            if os.path.exists(folder) and os.path.isdir(folder):
+                all_file = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+                #print(all_file[0:2])
+                file_count = len(all_file)
+                print(f"Number of files in {folder}: {file_count} at split {split}")
+            else:
+                print(f"{folder} does not exist or is not a directory.")
                 
 
 
