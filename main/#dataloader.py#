@@ -60,7 +60,6 @@ class DiagnosticDataset(Dataset):
         self.report_file_name = split+"_annotation.json"
         self.report_path = os.path.join(self.base_data_path,self.report_file_name)
         self.vocab = pickle.load(open(self.vocab_path,'rb'))
-        # self.vocab.add_word('<start>')
         # self.START_TOKEN = self.vocab.word2idx['<start>']
         self.END_TOKEN = self.vocab.word2idx['<end>']
         self.PAD_TOKEN = self.vocab.word2idx['<pad>'] # PAD_TOKEN is used for not supervison
@@ -164,31 +163,21 @@ class DiagnosticDataset(Dataset):
         caption = ' '.join(sentences) + ''
         return caption_tokens, caption
 
-    '''
-    Made changes, train with all 5 captions together
-    '''
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
         cap_id_in_img = index % 5
         graph_id = int(index / 5)
         label = self.labels[graph_id]
-      
-        #   pprevious code where in training, load one by one
         if self.split == "train":
             caption = self.captions[graph_id][cap_id_in_img]
             caption_tokens, caption = self.get_cap_and_token(caption)
         else :
-
             unclean_captions = self.captions[graph_id]
             caption = []
-            caption_tokens = []
             for i in unclean_captions:
-
-                caption_token , cap = self.get_cap_and_token(i)
-                #print(f"with graph_id {graph_id} capto is {caption_token}")
+                caption_tokens , cap = self.get_cap_and_token(i)
                 caption.append(cap)
-                caption_tokens.append(caption_token)
-        p#rint(f"split is {self.split} and length caption {len(caption)} length token {len(caption_token)}")
+
                 
             
         # print(f"Caption is {caption} ---- and --- {sentences}")
@@ -240,14 +229,10 @@ class DiagnosticDataset(Dataset):
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-
         if self.split == "train":
             return len(self.cg)*5
         else :
             return len(self.cg)
-        ''' 
-        return len(self.cg)
-        '''
 
 def collate(batch):
     """
@@ -307,7 +292,7 @@ if __name__ == "__main__":
     import os
 
     loader = make_dataloader(
-        batch_size = 2,
+        batch_size = 4,
         split = "train",
         base_data_path = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi",
         graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
@@ -319,8 +304,7 @@ if __name__ == "__main__":
 
     # for word, idx in loader.dataset.vocab.word2idx.items():
     #     print(f"Word: {word}, Index: {idx}")
-    cg,tg,am,cap_to, label, cap = next(iter(loader))
-    print(cap_to.shape)
+    # a = next(iter(loader))
     # total_batches = len(loader)
 
     # # print(f"Total batches: {total_batches}")
@@ -375,7 +359,7 @@ if __name__ == "__main__":
     # print(a[3])
     # print("-------------------")
     # print(a[4])
-    # print(loader.dataset.vocab)
+    print(loader.dataset.vocab)
 
-    # for word, idx in loader.dataset.vocab.word2idx.items():
-    #     print(f"Word: {word}, Index: {idx}")
+    for word, idx in loader.dataset.vocab.word2idx.items():
+        print(f"Word: {word}, Index: {idx}")

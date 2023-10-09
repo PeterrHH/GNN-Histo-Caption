@@ -1,21 +1,34 @@
 dataset_path: "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi"
 histocartography_path: "../histocartography/histocartography"
 graph_path: "../../../../../../srv/scratch/bic/peter/full-graph"
+encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
+decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
 vocab_path: "vocab_bladderreport.pkl"
-learning_rate: 0.001
+learning_rate: 0.0001
+weight_decay: 0.0001
 phase: train # train, test, eval
-epochs: 1
+epochs: 2
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
-batch_size: 64
+batch_size: 32
+save_model: False
+save_every: 2
+
+
 
 gnn_param:
   cell_layers: 2
-  tissue_layers: 2
+  tissue_layers: 1
   cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
-  aggregate_method: "max" # sum, mean, max
+  aggregate_method: "mean" # sum, mean, max
+  GAT: 
+    num_heads: 2
+  GraphSage:
+    aggregator_type: "mean" # mean, gcn, pool, lstm
+  GIN:
+
 
 
 lstm_param:

@@ -21,3 +21,8 @@ class Vocabulary(object):
 
     def __len__(self):
         return len(self.word2idx)
+    
+    def print_all_words(self):
+        for idx, word in self.idx2word.items():
+            print(f"key {idx}: {word}")
+    

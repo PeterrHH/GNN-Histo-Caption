@@ -1,4 +1,3 @@
-
 import torch.nn as nn
 import torch
 
@@ -19,62 +18,77 @@ class LSTMDecoder(nn.Module):
         self.word_embedding = nn.Embedding( self.vocab_size , self.embed_size)
         self.lstm = nn.LSTM(self.embed_size, self.hidden_size, self.num_layers, batch_first = True) # tensor shape (batch, seq, feature)  when batch_first = True
         self.linear = nn.Linear(self.hidden_size, self.vocab_size)
+        self.start_token = 119
 
-    def init_hidden(self):
-        return ( torch.zeros(self.num_layers , self.batch_size , self.hidden_size  ).to(self.device),
-        torch.zeros( self.num_layers , self.batch_size , self.hidden_size  ).to(self.device) )
+    def init_hidden(self,batch_size = None):
+        if batch_size is None:
+            batch_size = self.batch_size
+        return ( torch.zeros(self.num_layers , batch_size , self.hidden_size  ).to(self.device),
+        torch.zeros( self.num_layers , batch_size , self.hidden_size  ).to(self.device) )
 
+    '''
+    
+    Do it iteratively.
+    '''
     def forward(self,features,captions):
-        # decoded_output, _ = self.decoder(encoded_output)
-        # return decoded_output
-       # print(f"IN LSTM, the feature size is {features.shape}")
-        # print("-------------LSTM--------------")
-        # print(f"If there is Nan for Features {torch.any(torch.isnan(features))}")
-        # print(f"If there is Nan in for Captions {torch.any(torch.isnan(captions))}")
-
         if self.batch_size != features.shape[0]:
             self.batch_size = features.shape[0] 
+        batch_size = captions.shape[0]
+        seq_length = captions.shape[1]
         captions = captions[:,:-1]
         h_0, c_0 = self.init_hidden()
-       # print(f"Hidden shape is {h_0.shape}")
-       # print(f"Cell shape is {c_0.shape}")
-        #print(f'caption have shape {captions.shape}')
+ 
         embeds = self.word_embedding( captions)
-        #print(f"If there is Nan in for Caption Embedding {torch.any(torch.isnan(embeds))}")
-        #print(f"Hidden shape is {h_0.shape}")
-        #print(f"word embedding shape {embeds.shape} and features shape is {features.shape}")
+        print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1  ) 
-        #print(f"If there is Nan in for LSTM input {torch.any(torch.isnan(inputs))} and h0 {torch.any(torch.isnan(h_0))} c0 {torch.any(torch.isnan(c_0))}")
+    
         embeddings,_ = self.lstm(inputs,(h_0,c_0))
-        #print(f"If there is Nan in for Caption Embedding After LSTM {torch.any(torch.isnan(embeddings))}")
-        outputs = self.linear(self.dropout(embeddings))
-        #print(f"If there is Nan in for LSTM OUTPUT {torch.any(torch.isnan(outputs))}")
-        #print("-------------LSTM--------------")
+        '''
+        1,caption shape (bs,90) -> embeds shape (bs,89,1028)
+        2, feature shape (bs,1,1028) 
+        Concat 1 & 2 gives (bs, 90,1028)
+        tput shape is (bs,90,vocab_size)
+        '''
+
+    #     pred_output = torch.zeros(batch_size, seq_length, self.vocab_size).to(self.device)
+    #     embeds = self.word_embedding( captions)
+    #     for i in range(captions.shape[1]):
+    #         #print(f"shape of {embeds[:,i].shape} and features {features.shape}")
+    #         inputs = torch.cat((embeds[:,i].unsqueeze(1),features),dim = 2) # shape should be (bs,1,)
+    #         #print(f"inputs shape is {inputs.shape} h0 shape is {h_0.shape}")
+    #         embeddings, (h_0,c_0) = self.lstm(inputs,(h_0,c_0))
+    #         outputs = self.linear(self.dropout(embeddings))
+    #         pred_output[:,i,:] = outputs.squeeze(1)
+    #    # print(f"pred output shape is {pred_output.shape}")
+    #     return pred_output
+        outputs = self.dropout(self.linear(embeddings))
+        # outputs = 
+    
         return outputs
 
-    # def init_hidden(self):
-    #     h_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size).to(self.device)
-    #     c_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size).to(self.device)
-    #     return h_0, c_0
-
     def predict(self, inputs, max_len=50):        
-        final_output = []
-        batch_size = inputs.shape[0]         
+        batch_size = inputs.shape[0]  
+        final_output = torch.zeros(batch_size, max_len, dtype=torch.long)       
         hidden = self.init_hidden(batch_size) 
-    
-        while True:
+        outputs_tensor = torch.zeros((889, 90, 119)).to(self.device)
+        for idx in range(max_len):
             lstm_out, hidden = self.lstm(inputs, hidden) 
-            outputs = self.fc(lstm_out) 
-            print 
+            #outputs = self.linear(self.dropout(lstm_out))
+            outputs = self.dropout(self.linear(lstm_out))
             outputs = outputs.squeeze(1) 
             _, max_idx = torch.max(outputs, dim=1) 
-            final_output.append(max_idx.cpu().numpy()[0].item())             
-            if (max_idx == 1 or len(final_output) >=20 ):
+            outputs_tensor[:, idx, :] = outputs
+            # final_output.append(max_idx.cpu().numpy()[0].item())   
+            #print(f"Final output have shape {final_output.shape} with max_isx {max_idx.shape}") 
+            # torch.cat((final_output,max_idx.cpu()),dim = 1)         
+            final_output[:,idx] = max_idx.cpu()
+            if (idx >= max_len ):
                 break
             
             inputs = self.word_embedding(max_idx) 
-            inputs = inputs.unsqueeze(1)             
-        return final_output  
+            inputs = inputs.unsqueeze(1)     
+        print(final_output.shape)
+        return final_output,outputs_tensor 
 
 if __name__ == "__main__":
     import torch
@@ -87,13 +101,18 @@ if __name__ == "__main__":
     seq_length = 20
 
     # Create a sample input
-    sample_input = torch.randn(batch_size, seq_length, input_size)
+    sample_input = torch.randn(6,3)
+    abc = torch.randn(6)
     print("Input shape:", sample_input.shape)
-    # Initialize the model
-    model = LSTMDecoder(vocab_size, input_size, batch_size, hidden_size, device="cpu")
+    print("abc shape: ", abc)
+    print(sample_input)
+    sample_input[:,1] = abc
+    print(sample_input)
+    # # Initialize the model
+    # model = LSTMDecoder(vocab_size, input_size, batch_size, hidden_size, device="cpu")
 
-    # Get the output from the forward pass
-    output = model(sample_input)
+    # # Get the output from the forward pass
+    # output = model(sample_input)
 
-    print("Output shape:", output.shape)
-    print(output[0])
+    # print("Output shape:", output.shape)
+    # print(output[0])

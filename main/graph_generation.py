@@ -200,6 +200,79 @@ class GraphBuilding:
         ))
         print(self.image_failed)
 
+    def build_single(self, image_path, store_path):
+        #   Get a list of image and store them
+        # folder = os.path.join(images_folder, split)
+        # images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
+        # print(images_path)
+        images_path = [image_path]
+        for image_path in tqdm(images_path):
+            _, image_name = os.path.split(image_path)
+            print(image_path)
+            read_path = os.path.join(folder,image_path)
+            image = np.array(Image.open(read_path))
+            # print(f"Image has shape {image.shape}")
+        #   Get the store path
+            cg_out = os.path.join(store_path, 'cell_graphs', image_name.replace('.png', '.bin'))
+            tg_out = os.path.join(store_path, 'tissue_graphs',image_name.replace('.png', '.bin'))
+            assign_out = os.path.join(store_path, 'assignment_mat', image_name.replace('.png', '.h5'))
+
+
+            try: 
+                cg, nuclei_centroid = self.build_cg(image)
+                save_graphs(
+                    cg_out,
+                    g_list = [cg]
+                )
+            except Exception as e:
+                print("------------------------Cell Graph-----------------------")
+                print('Warning: {} failed during cell graph building.'.format(image_path))
+                print(f"Exception is {e} for cell Graph")
+                print("------------------------Cell Graph-----------------------")
+                self.image_failed.append(image_path)
+                pass
+
+            #   Build Tissue Graph and save it
+            try:
+                tissue_graph, tissue_map = self.build_tg(image)
+                save_graphs(
+                    tg_out,
+                    g_list = [tissue_graph]
+                )
+            except Exception as e:
+                print("------------------------Tissue Graph-----------------------")
+                print('Warning: {} failed during tissue graph building.'.format(image_path))
+                print(f"Exception is {e} for tissue Graph")
+                print("------------------------Tissue Graph-----------------------")
+                self.image_failed.append(image_path)
+                pass
+
+            try: 
+                assignment_matrix = self.assignment_mat_builder.process(nuclei_centroid, tissue_map)
+            #   Create relevant directory if not exist already
+                directory = os.path.dirname(assign_out)
+                os.makedirs(directory, exist_ok=True)
+                with h5py.File(assign_out, "w") as output_file:
+                    output_file.create_dataset(
+                        "assignment_matrix",
+                        data=assignment_matrix,
+                        compression="gzip",
+                        compression_opts=9,
+                    )
+            except Exception as e:
+                print("------------------------Assign Matrix-----------------------")
+                print('Warning: {} failed during assignment matrix generation.'.format(image_path))
+                print(f'Exception is {e} for assign matrix')
+                print("------------------------Assign Matrix-----------------------")
+                self.image_failed.append(image_path)
+                pass
+    
+        print('Out of {} images, {} successful graph generations.'.format(
+            len(images_path),
+            len(images_path) - len(self.image_failed)
+        ))
+        print(self.image_failed)
+
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
