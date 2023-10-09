@@ -10,6 +10,7 @@ import dgl
 import json
 import sys
 import nltk
+nltk.download('punkt')
 import pickle
 import torch
 import torch.nn as nn
@@ -97,7 +98,9 @@ class DiagnosticDataset(Dataset):
 
             
     def get_cell_graph(self):
+        # print(f"CG PATH IS {self.cg_path}")
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
+        #print(len(self.list_cg_path))
         self.list_cg_path.sort()
         self.num_cg = len(self.list_cg_path)
         cell_graphs = None
@@ -107,6 +110,7 @@ class DiagnosticDataset(Dataset):
         return cell_graphs
     
     def get_tissue_graph(self):
+        #print(f"TG PATH IS {self.tg_path}")
         self.list_tg_path = glob(os.path.join(self.tg_path, '*.bin'))
         self.list_tg_path.sort()
         self.num_tg = len(self.list_tg_path)
@@ -290,10 +294,10 @@ if __name__ == "__main__":
 
     loader = make_dataloader(
         batch_size = 4,
-        split = "test",
-        base_data_path = "../../Report-nmi-wsi",
-        graph_path = "graph",
-        vocab_path = "../../Report-nmi-wsi/vocab_bladderreport.pkl",
+        split = "train",
+        base_data_path = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi",
+        graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
+        vocab_path = "vocab_bladderreport.pkl",
         shuffle=True,
         num_workers=0,
         load_in_ram = True

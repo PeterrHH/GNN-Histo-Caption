@@ -1,8 +1,8 @@
-dataset_path: "../../Report-nmi-wsi"
+dataset_path: "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi"
 histocartography_path: "../histocartography/histocartography"
-graph_path: "full-graph"
+graph_path: "../../../../../../srv/scratch/bic/peter/full-graph"
 output_path: "output"
-vocab_path: "../../Report-nmi-wsi/vocab_bladderreport.pkl"
+vocab_path: "vocab_bladderreport.pkl"
 learning_rate: 0.001
 phase: train # train, test, eval
 epochs: 1

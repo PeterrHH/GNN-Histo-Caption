@@ -166,3 +166,5 @@ cython_debug/
 main/graph/*
 main/full-graph/*
 main/graph 1/*
+main/wandb/*
+GNN_trial.*

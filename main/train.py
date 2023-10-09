@@ -241,6 +241,7 @@ def main():
 
     #   make the dl here
     #   !!!!!!!!!!! Change it back to train
+    print("Loading train")
     train_dl = make_dataloader(
         batch_size = args["batch_size"],
         split = "train",
@@ -251,7 +252,7 @@ def main():
         num_workers=0,
         load_in_ram = True
     )
-
+    print("Loading test")
     test_dl = make_dataloader(
         batch_size = 1000, # there are 1000
         split = "test",

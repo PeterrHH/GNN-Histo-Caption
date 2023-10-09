@@ -203,7 +203,7 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../Report-nmi-wsi" # ../../../../../../srv/scratch/bic/peter/Report-nmi-wsi/Images
+    folder = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi/Images"
     target = "./target_img/target.png"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
