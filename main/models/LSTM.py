@@ -35,48 +35,58 @@ class LSTMDecoder(nn.Module):
             self.batch_size = features.shape[0] 
         batch_size = captions.shape[0]
         seq_length = captions.shape[1]
+        
         captions = captions[:,:-1]
+
         h_0, c_0 = self.init_hidden()
  
         embeds = self.word_embedding( captions)
-        print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
+       # print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1  ) 
     
         embeddings,_ = self.lstm(inputs,(h_0,c_0))
-        '''
-        1,caption shape (bs,90) -> embeds shape (bs,89,1028)
-        2, feature shape (bs,1,1028) 
-        Concat 1 & 2 gives (bs, 90,1028)
-        tput shape is (bs,90,vocab_size)
-        '''
+        
+        #1,caption shape (bs,90) -> embeds shape (bs,89,1028)
+        #2, feature shape (bs,1,1028) 
+       # Concat 1 & 2 gives (bs, 90,1028)
+        #tput shape is (bs,90,vocab_size)
+        
 
-    #     pred_output = torch.zeros(batch_size, seq_length, self.vocab_size).to(self.device)
-    #     embeds = self.word_embedding( captions)
-    #     for i in range(captions.shape[1]):
-    #         #print(f"shape of {embeds[:,i].shape} and features {features.shape}")
-    #         inputs = torch.cat((embeds[:,i].unsqueeze(1),features),dim = 2) # shape should be (bs,1,)
-    #         #print(f"inputs shape is {inputs.shape} h0 shape is {h_0.shape}")
-    #         embeddings, (h_0,c_0) = self.lstm(inputs,(h_0,c_0))
-    #         outputs = self.linear(self.dropout(embeddings))
-    #         pred_output[:,i,:] = outputs.squeeze(1)
-    #    # print(f"pred output shape is {pred_output.shape}")
-    #     return pred_output
         outputs = self.dropout(self.linear(embeddings))
-        # outputs = 
-    
+        
         return outputs
+        '''
+        # 5 caption all together, learn together at once
+
+        for cap_idx in range(captions.size(1)):
+            h_0, c_0 = self.init_hidden()
+            single_caption = captions[:,cap_idx,:]
+            single_caption = single_caption[:,:-1]
+
+
+            embeds = self.word_embedding(single_caption)
+            # print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
+            inputs = torch.cat( ( features, embeds ) , dim =1  ) 
+            
+            embeddings,_ = self.lstm(inputs,(h_0,c_0))
+
+            outputs = self.dropout(self.linear(embeddings))
+        print(f"output in lstm shape is {outputs.shape}")
+        return outputs
+        '''
 
     def predict(self, inputs, max_len=50):        
         batch_size = inputs.shape[0]  
         final_output = torch.zeros(batch_size, max_len, dtype=torch.long)       
         hidden = self.init_hidden(batch_size) 
-        outputs_tensor = torch.zeros((889, 90, 119)).to(self.device)
+        outputs_tensor = torch.zeros((batch_size, 90, 119)).to(self.device)
         for idx in range(max_len):
             lstm_out, hidden = self.lstm(inputs, hidden) 
             #outputs = self.linear(self.dropout(lstm_out))
             outputs = self.dropout(self.linear(lstm_out))
             outputs = outputs.squeeze(1) 
             _, max_idx = torch.max(outputs, dim=1) 
+            print(f"out ten {outputs_tensor.shape} and {outputs.shape}")
             outputs_tensor[:, idx, :] = outputs
             # final_output.append(max_idx.cpu().numpy()[0].item())   
             #print(f"Final output have shape {final_output.shape} with max_isx {max_idx.shape}") 

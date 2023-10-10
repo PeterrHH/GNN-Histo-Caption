@@ -183,8 +183,9 @@ def eval(eval_loader,encoder,decoder,device, batch_size,criterion, vocab_size, e
         #print(f"Length of labels {labels.shape}")
         cg = cg.to( device)
         tg = tg.to(device)
-        print(f"cell graph {cg} tissue graph {tg} assign mat len {len(assign_mat)} shape {assign_mat[0].shape}")
-
+        print(f"caption_tokens shape {caption_tokens.shape}")
+        print(f"caption len{len(captions)} within {len(captions[0])}")
+        print(captions[0])
         encoder , decoder = encoder.to(device) , decoder.to(device)
         caption_tokens = caption_tokens.to(device)
         # encoder.eval()
@@ -195,28 +196,24 @@ def eval(eval_loader,encoder,decoder,device, batch_size,criterion, vocab_size, e
             #print("LSTM OUT HERE")
         #   Evaluate
         if eval:
-        # print(f"In eval lstm_out {lstm_out.shape} and cap token is {caption_tokens.shape}")
-            eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )
+           # print(f"In eval lstm_out {lstm_out.shape} and cap token is {caption_tokens.shape}")
+           # print(f"lstm view shape {lstm_out_tensor.view(-1, vocab_size).shape} and cap view {caption_tokens.view(-1).shape}")
+           '''
+            all_eval_loss = []
+            for cap_idx in range(caption_tokens.size(1)):
+                all_eval_loss.append(criterion(lstm_out_tensor.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1)))
+            eval_loss = sum(all_eval_loss) / len(all_eval_loss)
+            '''
+        eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )
         pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
-        # print(f"---------------------------------------")
-        # print(cap_dict)
-        # print(f"-------------CAP DICT ABOVE------------")
-        # print(pred_dict)
-        # print(f"-------------Pred DICT ABOVE-------------")
-        # scorer = Scorer(cap_dict,pred_dict)
+
         scorer = Scorer(cap_dict,pred_dict)
         # if eval:
         scores = scorer.compute_scores()
         if eval is False:
             for key,value in scores.items():
                 test_output[key].append(value[0])
-        # else:
-        #     scores = scorer.compute_scores_iterative()
-        # packed = unpack_score(scores)
-        # print(packed)
-        # for i, key in enumerate(test_output.keys()):
 
-        #     test_output[key].append(packed[i])
     if eval:
         # compute only mean
         test_output = {key: value[0] for key, value in scores.items()}
@@ -377,6 +374,7 @@ def main():
  
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
     all_params = list(decoder.parameters())  + list( encoder.parameters() )
+    print(f"----------TOTAL NUMBER OF PARAMETERS: {len(all_params)}-------------")
     optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
     
     MAX_LENGTH = 100
@@ -389,7 +387,7 @@ def main():
         #   set the wandb project where this run will be logged
         wandb.init(
             project="GNN simplifcation and application in histopathology image captioning",
-            name = "GSage-LSTM mean-agg bs32 with relu (3 CL 1 TL) wd = 0.0001",
+            name = args["wandb_name"],
             #   track hyperparameters and run metadata
             config={
                 "architecture": "GCN-LSTM",
@@ -412,7 +410,7 @@ def main():
             for step in range(total_step):
                 #if args["graph_model_type"] == "Hierarchical":
                 cg, tg, assign_mat, caption_tokens, labels, caption = next(iter(train_dl))
-
+                print(f"caption tokens type{type(caption_tokens)} shape {caption_tokens.shape}")
                 cg = cg.to(DEVICE)
                 tg = tg.to(DEVICE)
                 # assign_mat = assign_mat.to(DEVICE)
@@ -423,29 +421,36 @@ def main():
                 decoder.zero_grad()
                 # print(f"Input shape is {cg}")
                 out = encoder(cg,tg,assign_mat) # (batch_size, 1, embedding)
-                print(f"encoder out shape is {out.shape} caption token shape {caption_tokens.shape}")
+       
                 lstm_out = decoder(out,caption_tokens)
-               # print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
+                print(f"caption shape {caption_tokens.shape} lstm shape is {lstm_out.shape}")
                 #At the end, run eval set  
-                lstm_out_prep = lstm_out.view(-1, vocab_size)
-                caption_prep = caption_tokens.view(-1) 
+
                 # print(f"before shape {lstm_out.shape} cap token {caption_tokens.shape}")
                 # print(f"first ist {lstm_out.view(-1, vocab_size).shape} cap token {caption_tokens.view(-1).shape}")
+                '''
+                all_loss = []
+                for cap_idx in range(caption_tokens.size(1)):
+                    print(f"cap_tok shape at {cap_idx} is {caption_tokens[:,cap_idx,:].shape}")
+                    print(f"first ist {lstm_out.view(-1, vocab_size).shape}")
+                    all_loss.append(criterion(lstm_out.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1)))
+                loss = sum(all_loss) / len(all_loss)
+                '''
                 loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
+                
 
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
                 loss.backward(retain_graph=True)
                 nn.utils.clip_grad_norm_(all_params, 1.0)
                 optimizer.step()
                 total_loss.append(loss.item())
-                #print(f"FEAT SIZE IS {cg.ndata['feat'].shape}")
-                # print(cg.ndata['feat'])
+
             mean_loss = np.mean(total_loss)
-            # wandb.log({'trian_loss':loss})
+
             del total_loss
             print(f"Eval set evaluating mean loss as {mean_loss} in epoch {epoch}")
             scores,eval_loss = eval(eval_dl,encoder,decoder,DEVICE,889,criterion,vocab_size)
-            # bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider, spice = unpack_score(scores) # mean and standard dev
+
             eval_output = {
                 'train_loss':mean_loss,
                 'eval_loss':eval_loss,

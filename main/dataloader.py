@@ -12,6 +12,7 @@ import sys
 import nltk
 nltk.download('punkt')
 import pickle
+import random
 import torch
 import torch.nn as nn
 sys.path.append('../histocartography/histocartography')
@@ -169,10 +170,11 @@ class DiagnosticDataset(Dataset):
     '''
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
-        cap_id_in_img = index % 5
+        #cap_id_in_img = index % 5
+        cap_id_in_img = random.randint(0, 4)
         graph_id = int(index / 5)
         label = self.labels[graph_id]
-      
+
         #   pprevious code where in training, load one by one
         if self.split == "train":
             caption = self.captions[graph_id][cap_id_in_img]
@@ -181,15 +183,27 @@ class DiagnosticDataset(Dataset):
 
             unclean_captions = self.captions[graph_id]
             caption = []
-            caption_tokens = []
+            # caption_tokens = []
             for i in unclean_captions:
 
-                caption_token , cap = self.get_cap_and_token(i)
+                caption_tokens , cap = self.get_cap_and_token(i)
                 #print(f"with graph_id {graph_id} capto is {caption_token}")
                 caption.append(cap)
-                caption_tokens.append(caption_token)
-        p#rint(f"split is {self.split} and length caption {len(caption)} length token {len(caption_token)}")
-                
+                # caption_tokens.append(caption_token)
+        #rint(f"split is {self.split} and length caption {len(caption)} length token {len(caption_token)}")
+        '''
+        unclean_captions = self.captions[graph_id]
+        caption_tokens = []
+        caption = []
+        # caption_tokens = []
+        for i in unclean_captions:
+
+            caption_token , cap = self.get_cap_and_token(i)
+            #print(f"with graph_id {graph_id} capto is {caption_token}")
+            caption.append(cap)
+            caption_tokens.append(torch.tensor(caption_token).long())
+
+        '''
             
         # print(f"Caption is {caption} ---- and --- {sentences}")
         # 1. Hierarchical Graphs
@@ -216,6 +230,7 @@ class DiagnosticDataset(Dataset):
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
             #print(len(caption_tokens))
             return cg,tg,assign_mat, torch.tensor(caption_tokens).long(), label, caption
+            #return cg,tg,assign_mat, torch.stack(caption_tokens), label, caption
         
         #   Use only tissue graph
         elif hasattr(self,'num_tg'):
@@ -240,14 +255,15 @@ class DiagnosticDataset(Dataset):
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-
+        '''
         if self.split == "train":
             return len(self.cg)*5
         else :
             return len(self.cg)
         ''' 
         return len(self.cg)
-        '''
+
+
 
 def collate(batch):
     """
@@ -339,43 +355,4 @@ if __name__ == "__main__":
         #     print("------------------------------")
         # break
     
-        # caption_dict = {str(i + 1): value for i, value in enumerate(caption)}
-        # print(caption_tokens)
-        # print(caption)
-        #print(caption_dict)
-       #print(cg)
-       # print(f"----------CG--------------")
-        #print(tg.ndata['feat'])
-        # tg_unb = dgl.unbatch(tg)
-        # print(tg_unb)
-    
-        # print(f"----------TG--------------")
-        # print(caption)
-        # print('\n')
-        # print(assign_mat[0])
-        # print(f"type is {type(assign_mat[0])}")
-        # print(f"----------ASSIGN_MAT--------------")
-        # print(caption_tokens.shape)
-        # # caption_tokens = nn.utils.rnn.pad_sequence(caption_tokens, batch_first=True)
-        # # print(caption_tokens.unsqueeze(-1))
-        # print(f"----------Caption_tokens--------------")
-        # print(label.shape)
-        # print(f"----------Label--------------")
-        # break
  
-
-    # print(f"Number of batches iterated: {batch_idx + 1}")
-    # print("START PRINT CONTENT")
-    # print(a[0])
-    # print("---------------------")
-    # print(a[1])
-    # print("---------------------")
-    # print(a[2])
-    # print("---------------------")
-    # print(a[3])
-    # print("-------------------")
-    # print(a[4])
-    # print(loader.dataset.vocab)
-
-    # for word, idx in loader.dataset.vocab.word2idx.items():
-    #     print(f"Word: {word}, Index: {idx}")

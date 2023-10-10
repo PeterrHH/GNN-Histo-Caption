@@ -8,17 +8,18 @@ vocab_path: "vocab_bladderreport.pkl"
 learning_rate: 0.0001
 weight_decay: 0.0001
 phase: train # train, test, eval
-epochs: 2
+epochs: 100
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 batch_size: 32
 save_model: False
 save_every: 2
+wandb_name: GCN-LSTM bs 32 train with random cap in each epoch
 
 
 
 gnn_param:
-  cell_layers: 2
-  tissue_layers: 1
+  cell_layers: 3
+  tissue_layers: 3
   cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
@@ -32,5 +33,5 @@ gnn_param:
 
 
 lstm_param:
-  dropout: 0.5
+  dropout: 0.3
 
