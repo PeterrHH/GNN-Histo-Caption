@@ -1,7 +1,8 @@
 # GNN-Histo-Caption
 GNN for Histopathology Image Captioning
 
-
+## Dataset split
+After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. To split data, run the file data_split.py.
 ## Graph Building
 Graph Building part of the code mainly followed the process in Hact-Net
 ### Cell Graph <br />
