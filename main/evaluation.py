@@ -136,10 +136,18 @@ if __name__ == '__main__':
         '3': ['I know how good this is']
     }
 
-    ref = {'1': ['go down the stairs all the way and stop at the bottom','go down the stairs all the way and stop at the bottom'],
-           '2':['It is a cat.','It is a cat']}
-    gen = {'1': ['go down the stairs all the way and stop at the bottom'],
-           '2':['It is a cat.']}
+    ref = {
+           '1':['Slight variability in nuclear size shape and outline consistent with mild pleomorphism . There is a severe degree of crowding . Polarity is completely lost . Mitosis is frequent throughout the tissue . Prominent nucleoli are easily identified in low magnification scanning . High grade .',
+                'Mild pleomorphism is present . There is a severe degree of crowding . Architecturally the cells show complete lack of polarity toward the surface urothelium . Mitosis is frequent throughout the tissue . The nucleoli of nuclei are prominent . High grade .', 
+                'Mild pleomorphism is present . Nuclei are severely crowded together . There is marked disorganization and lack of cellular polarity toward the surface urothelium . Mitosis is frequent . Nucleoli is prominent . High grade .', 
+                'Mild pleomorphism and cytologic atypia is present . The nuclei are crowded to a severe degree . Polarity is completely lost . There are frequent mitotic figures throughout the tissue . The nucleoli of nuclei are prominent . High grade .', 
+                'Nuclear features show mild pleomorphism . There is a severe degree of crowding . Architecturally the cells show complete lack of polarity toward the surface urothelium . Mitotic figures including the atypical forms are frequently seen in all levels of the urothelium . Nucleoli is prominent . High grade .']}
+    gen = {
+           '1':['mild pleomorphism . there are and prominent nucleoli are not observed or exceedingly rare and limited to .']}
+    
+
+
+
     scorer = Scorer(ref,gen)
     tol_scores = scorer.compute_scores()
     print(tol_scores)

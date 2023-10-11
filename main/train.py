@@ -134,28 +134,36 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
     for i,caption in enumerate(captions):
         for sent_i,sent_cap in enumerate(caption):
             captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","")
+            
     j = 0
     for idx,embed in enumerate(decode_output):
 
         sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
         sentence = sentence.replace("<pad>","").replace("<start>","")
         sentence = ' '.join(sentence.split()).replace("<end>", ".")
+        #print(f"length pred_dict {len(pred_dict.keys())} and length cap {len(cap_dict.keys())}")
+        print(f"---------_For idx = {idx}------------")
+        print(sentence)
+        print(captions[idx])
         if len(pred_dict.keys()) == 0:
             #   Empty
             pred_dict["1"] = [sentence]
+            # for i in range(5):
+            #     cap_dict[str(int(i)+1)] = captions[idx]
             cap_dict["1"] = captions[idx]
-            print(f"-------Prediction------")
-            print(pred_dict)
-            print(f"---------cap dict-------")
-            print(cap_dict)
+            # print(f"-------Prediction------")
+            # print(pred_dict)
+            # print(f"---------cap dict-------")
+            # print(cap_dict)
             pass
         else:
             pred_dict[str(len(pred_dict)+1)] = [sentence]
             cap_dict[str(len(cap_dict)+1)] = captions[idx]
     
-    print(f"length pred {len(pred_dict)} and leng cap {len(cap_dict)}")
-    # print(f"EXP-------------")
-    # print(pred_dict)
+   # print(f"length pred {len(pred_dict)} and leng cap {len(cap_dict)}")
+    print(f"E-----pred dict--------")
+    print(pred_dict.keys())
+    # print(f"E----cap dict-------")
     # print(cap_dict)
     return pred_dict,cap_dict
 
@@ -175,8 +183,8 @@ def eval(eval_loader,encoder,decoder,device, batch_size,criterion, vocab_size, e
         "CIDEr":[],
         "SPICE":[]
     }
-    print(f"total sample is {total_samples} total step is {total_step} batch_size is {batch_size}")
-    print(f"TOTAL STEP is {total_step}")
+    #print(f"total sample is {total_samples} total step is {total_step} batch_size is {batch_size}")
+    #print(f"TOTAL STEP is {total_step}")
     for step in tqdm(range(total_step)):
         cg, tg, assign_mat, caption_tokens, labels, captions = next(iter(eval_loader))
         # caption_dict = {str(i + 1): value for i, value in enumerate(captions)}
@@ -185,7 +193,6 @@ def eval(eval_loader,encoder,decoder,device, batch_size,criterion, vocab_size, e
         tg = tg.to(device)
         print(f"caption_tokens shape {caption_tokens.shape}")
         print(f"caption len{len(captions)} within {len(captions[0])}")
-        print(captions[0])
         encoder , decoder = encoder.to(device) , decoder.to(device)
         caption_tokens = caption_tokens.to(device)
         # encoder.eval()
@@ -196,17 +203,22 @@ def eval(eval_loader,encoder,decoder,device, batch_size,criterion, vocab_size, e
             #print("LSTM OUT HERE")
         #   Evaluate
         if eval:
-           # print(f"In eval lstm_out {lstm_out.shape} and cap token is {caption_tokens.shape}")
+            print(f"In eval lstm_out {lstm_out.shape} and cap token is {caption_tokens.shape}")
            # print(f"lstm view shape {lstm_out_tensor.view(-1, vocab_size).shape} and cap view {caption_tokens.view(-1).shape}")
-           '''
+
             all_eval_loss = []
             for cap_idx in range(caption_tokens.size(1)):
                 all_eval_loss.append(criterion(lstm_out_tensor.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1)))
             eval_loss = sum(all_eval_loss) / len(all_eval_loss)
-            '''
-        eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )
-        pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
+        else:
+            eval_loss = None
 
+        #eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )
+        pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
+        # print(f"-------cap_dict-------")
+        # print(cap_dict)
+        # print(f'-----pred_dict------')
+        # print(pred_dict)
         scorer = Scorer(cap_dict,pred_dict)
         # if eval:
         scores = scorer.compute_scores()
@@ -268,9 +280,11 @@ def load_model(encoder_path, decoder_path,vocab_size,args,device):
     decoder = LSTMDecoder(
         vocab_size = vocab_size, 
         embed_size = 256, 
-        hidden_size = 128,  
+        hidden_size = 256,  
         batch_size= args["batch_size"], 
-        device = device
+        device = device,
+        dropout = args["lstm_param"]["dropout"],
+        num_layers = args["lstm_param"]["num_layers"]
     )
     if os.path.exist(encoder_path):
         # load
@@ -342,7 +356,7 @@ def main():
     )
 
     eval_dl = make_dataloader(
-        batch_size = 889, # there are 889 in test set
+        batch_size = 889, # there are 889 in eval set
         split = "eval",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
@@ -359,23 +373,29 @@ def main():
         tg_layer = args['gnn_param']['tissue_layers'],
         aggregate_method = "sum", 
         input_feat = 514,
-        output_size = 128
+        output_size = 256
     )
 
 
     decoder = LSTMDecoder(
         vocab_size = vocab_size, 
-        embed_size = 128, 
-        hidden_size = 128,  
+        embed_size = 256, 
+        hidden_size = 256,  
         batch_size= args["batch_size"], 
-        device = DEVICE
+        device = DEVICE,
+        dropout = args["lstm_param"]["dropout"],
+        num_layers = args["lstm_param"]["num_layers"]
     )
     encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
  
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
     all_params = list(decoder.parameters())  + list( encoder.parameters() )
     print(f"----------TOTAL NUMBER OF PARAMETERS: {len(all_params)}-------------")
-    optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
+    if args["optimizer_type"] == "Adam":
+        #optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
+        optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+    elif args["optimizer_type"] == "SGD":
+        optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"])
     
     MAX_LENGTH = 100
     # model = GNN_LSTM(encoder, decoder,hidden_dim, vocab_size,gnn_param, lstm_param, phase)
@@ -393,11 +413,12 @@ def main():
                 "architecture": "GCN-LSTM",
                 "dataset": "Nmi-Wsi-Diagnosis",
                 "epoch": args["epochs"],
-                "batch_size": args["batch_size"]
+                "batch_size": args["batch_size"],
+                "num_param":len(all_params),
             }
         )
         total_samples = len(train_dl)
-        batch_size = 4
+        batch_size = args["batch_size"]
         total_step = math.ceil(total_samples / batch_size)
         
         print(f"Number of steps per epoch: {total_step}")

@@ -41,7 +41,7 @@ class LSTMDecoder(nn.Module):
         h_0, c_0 = self.init_hidden()
  
         embeds = self.word_embedding( captions)
-       # print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
+        print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1  ) 
     
         embeddings,_ = self.lstm(inputs,(h_0,c_0))
@@ -86,7 +86,7 @@ class LSTMDecoder(nn.Module):
             outputs = self.dropout(self.linear(lstm_out))
             outputs = outputs.squeeze(1) 
             _, max_idx = torch.max(outputs, dim=1) 
-            print(f"out ten {outputs_tensor.shape} and {outputs.shape}")
+            #print(f"out ten {outputs_tensor.shape} and {outputs.shape}")
             outputs_tensor[:, idx, :] = outputs
             # final_output.append(max_idx.cpu().numpy()[0].item())   
             #print(f"Final output have shape {final_output.shape} with max_isx {max_idx.shape}") 
@@ -97,7 +97,6 @@ class LSTMDecoder(nn.Module):
             
             inputs = self.word_embedding(max_idx) 
             inputs = inputs.unsqueeze(1)     
-        print(final_output.shape)
         return final_output,outputs_tensor 
 
 if __name__ == "__main__":

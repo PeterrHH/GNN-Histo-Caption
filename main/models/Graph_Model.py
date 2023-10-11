@@ -83,7 +83,7 @@ class GNNEncoder(nn.Module):
             else:
                 self.cell_layer.append(
                     nn.Sequential(
-                        self.selected_cell_conv_method,
+                        self.get_gm(self.cell_conv_method,self.hidden_feat,self.hidden_feat),
                         GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
@@ -100,7 +100,7 @@ class GNNEncoder(nn.Module):
             else:
                 self.tissue_layer.append(
                     nn.Sequential(
-                        self.selected_tissue_conv_method,
+                        self.get_gm(self.tissue_conv_method,self.hidden_feat,self.hidden_feat),
                         GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
@@ -201,7 +201,7 @@ class GNNEncoder(nn.Module):
         # print(f"-----------After Layer---------")
         # # print(cell_feat)
         # print(f"-----------After Layer---------")
-        x = self.readout(cell_graph,cell_feat)
+        #x = self.readout(cell_graph,cell_feat)
         #print(f"BEFORE READOUT shape {cell_feat.shape} and AFTER IS {x.shape}")
         # x = self.cell_lin_out(x)
 

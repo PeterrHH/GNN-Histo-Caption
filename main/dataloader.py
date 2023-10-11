@@ -170,26 +170,28 @@ class DiagnosticDataset(Dataset):
     '''
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
-        #cap_id_in_img = index % 5
-        cap_id_in_img = random.randint(0, 4)
+        cap_id_in_img = index % 5
+        #cap_id_in_img = random.randint(0, 4)
         graph_id = int(index / 5)
         label = self.labels[graph_id]
-
+        return_caption_tokens = None
         #   pprevious code where in training, load one by one
         if self.split == "train":
             caption = self.captions[graph_id][cap_id_in_img]
             caption_tokens, caption = self.get_cap_and_token(caption)
+            return_caption_tokens = torch.tensor(caption_tokens).long()
         else :
 
             unclean_captions = self.captions[graph_id]
             caption = []
-            # caption_tokens = []
+            caption_tokens = []
             for i in unclean_captions:
 
-                caption_tokens , cap = self.get_cap_and_token(i)
+                caption_token , cap = self.get_cap_and_token(i)
                 #print(f"with graph_id {graph_id} capto is {caption_token}")
                 caption.append(cap)
-                # caption_tokens.append(caption_token)
+                caption_tokens.append(torch.tensor(caption_token).long())
+            return_caption_tokens = torch.stack(caption_tokens)
         #rint(f"split is {self.split} and length caption {len(caption)} length token {len(caption_token)}")
         '''
         unclean_captions = self.captions[graph_id]
@@ -229,7 +231,7 @@ class DiagnosticDataset(Dataset):
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
             #print(len(caption_tokens))
-            return cg,tg,assign_mat, torch.tensor(caption_tokens).long(), label, caption
+            return cg,tg,assign_mat, return_caption_tokens, label, caption
             #return cg,tg,assign_mat, torch.stack(caption_tokens), label, caption
         
         #   Use only tissue graph
@@ -255,14 +257,14 @@ class DiagnosticDataset(Dataset):
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-        '''
+
         if self.split == "train":
             return len(self.cg)*5
         else :
             return len(self.cg)
         ''' 
         return len(self.cg)
-
+        '''
 
 
 def collate(batch):
@@ -324,7 +326,7 @@ if __name__ == "__main__":
 
     loader = make_dataloader(
         batch_size = 2,
-        split = "train",
+        split = "test",
         base_data_path = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi",
         graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
         vocab_path = "vocab_bladderreport.pkl",
@@ -337,6 +339,12 @@ if __name__ == "__main__":
     #     print(f"Word: {word}, Index: {idx}")
     cg,tg,am,cap_to, label, cap = next(iter(loader))
     print(cap_to.shape)
+    print(cap_to)
+
+    print("-----------")
+    for i in cap:
+        print(i)
+        print("--next sentence--")
     # total_batches = len(loader)
 
     # # print(f"Total batches: {total_batches}")

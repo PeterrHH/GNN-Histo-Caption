@@ -5,15 +5,16 @@ encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
 vocab_path: "vocab_bladderreport.pkl"
-learning_rate: 0.0001
+learning_rate: 0.001
 weight_decay: 0.0001
 phase: train # train, test, eval
 epochs: 100
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
+optimizer_type: "Adam" # Adam, SGD
 batch_size: 32
 save_model: False
 save_every: 2
-wandb_name: GCN-LSTM bs 32 train with random cap in each epoch
+wandb_name: GCN-LSTM bs 32 train max all cap in each epoch no wd Adam
 
 
 
@@ -23,7 +24,7 @@ gnn_param:
   cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
-  aggregate_method: "mean" # sum, mean, max
+  aggregate_method: "max" # sum, mean, max
   GAT: 
     num_heads: 2
   GraphSage:
@@ -33,5 +34,6 @@ gnn_param:
 
 
 lstm_param:
-  dropout: 0.3
+  dropout: 0.5
+  num_layers: 3
 
