@@ -2,9 +2,7 @@
 GNN for Histopathology Image Captioning (working on it now). The link to download dataset is [here](https://figshare.com/projects/nmi-wsi-diagnosis/61973).
 
 ## Dataset split
-After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. 
-
-The proper dataset set up should be as below
+After downloading, the dataset folder structure should be as below:
 
     .
     ├── ...
@@ -15,6 +13,7 @@ The proper dataset set up should be as below
     └── ...
 
 
+We first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. We will have 1000 set as testing and 889 as evaluation set.
 To split data, run the file data_split.py.
 
     
