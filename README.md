@@ -2,7 +2,7 @@
 GNN for Histopathology Image Captioning (working on it now)
 
 ## Dataset split
-After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. To split data, run the file data_split.py.
+After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. 
 
 The proper dataset set up should be as below
 
@@ -13,10 +13,13 @@ The proper dataset set up should be as below
     ├── train_annotation.json     # original training annotation file
     ├── test_annotation.json      # original testing annotation file
     └── ...
+
+
+To split data, run the file data_split.py.
+
     
-'''
-python3 data_split.py --dataset_path /path/to/image/data_path
-'''
+    python3 data_split.py --dataset_path /path/to/image/data_path
+    
 
 After running data_split, data structure should be as below
 
@@ -32,9 +35,18 @@ After running data_split, data structure should be as below
     └── ...
 
 
+
     
 ## Graph Building
-Graph Building part of the code mainly followed the process in Hact-Net
+Graph Building part of the code mainly followed the process in Hact-Net.
+To run Graph Building, Run the graph building file.
+
+
+    python3 graph_generation.py
+
+It will generate a cell graph, tissue graph and assignment matrix for each image.
+
+
 ### Cell Graph <br />
 1. **Nuclei Detection** <br />
 specifically cell detection. This is done using the histocartography package. General rule is to use a pretrained HoverNet. Then extract a square patches around the detected nuclei. Patch size is set at 72 x 72 pixels. Feature extractor is a ResNet34 pretrained on Imagenet. <br />
