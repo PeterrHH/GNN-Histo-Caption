@@ -3,6 +3,36 @@ GNN for Histopathology Image Captioning (working on it now)
 
 ## Dataset split
 After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. To split data, run the file data_split.py.
+
+The proper dataset set up should be as below
+
+    .
+    ├── ...
+    ├── Images                    # Image Folder
+    │   ├── ...                   # All the images are here
+    ├── train_annotation.json     # original training annotation file
+    ├── test_annotation.json      # original testing annotation file
+    └── ...
+    
+'''
+python3 data_split.py --dataset_path /path/to/image/data_path
+'''
+
+After running data_split, data structure should be as below
+
+    .
+    ├── ...
+    ├── Images                    # Image Folder
+    │   ├── train                 # All the images for training set
+    │   ├── eval                  # All the images for evaluation set
+    │   └── test                  # All the images for testing set
+    ├── train_annotation.json     # original training annotation file
+    ├── eval_annotation.json      # original testing annotation file
+    ├── test_annotation.json      # original testing annotation file
+    └── ...
+
+
+    
 ## Graph Building
 Graph Building part of the code mainly followed the process in Hact-Net
 ### Cell Graph <br />
