@@ -1,5 +1,5 @@
 # GNN-Histo-Caption
-GNN for Histopathology Image Captioning (working on it now)
+GNN for Histopathology Image Captioning (working on it now). The link to download dataset is [here](https://figshare.com/projects/nmi-wsi-diagnosis/61973).
 
 ## Dataset split
 After downloading, first engage in dataset splitting. Origianl dataset only split train and test. We will further split test to create a valuation set and a testing set. We will also split the image according to the data split. 
