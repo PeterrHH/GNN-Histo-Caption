@@ -1,39 +1,60 @@
-dataset_path: "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi"
+dataset_path: "../../../../../../srv/scratch/bic/peter/Report"
 histocartography_path: "../histocartography/histocartography"
 graph_path: "../../../../../../srv/scratch/bic/peter/full-graph"
 encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
 vocab_path: "vocab_bladderreport.pkl"
-learning_rate: 0.001
-weight_decay: 0.0001
+learning_rate: 0.0005
+weight_decay: 0.005
 phase: train # train, test, eval
 epochs: 100
+decoder_type: "LSTM" # Transformer, LSTM
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 optimizer_type: "Adam" # Adam, SGD
-batch_size: 32
+batch_size: 8
 save_model: False
 save_every: 2
-wandb_name: GCN-LSTM bs 32 train max all cap in each epoch no wd Adam
+loss: label # Both, caption, label
+wandb_name: CNN/GS-LSTM bs 128 train max all cap in each epoch lr .00005 wd 0.005 SGD 2 layer lstm drop 0.2 emb 128, ATTENTION 4 H
 
 
 
 gnn_param:
   cell_layers: 3
   tissue_layers: 3
-  cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
-  tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
+  cell_conv_method: "GraphSage" # GCN, GAT, GraphSage, GIN, PNA
+  tissue_conv_method: "GraphSage" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
-  aggregate_method: "max" # sum, mean, max
+  aggregate_method: "mean" # sum, mean, max
+  hidden_size: 256
+  output_size: 256
   GAT: 
     num_heads: 2
   GraphSage:
-    aggregator_type: "mean" # mean, gcn, pool, lstm
+    aggregator_type: "gcn" # mean, gcn, pool, lstm
   GIN:
 
+global_class_param:
+  hidden_size: 512
+  output_size: 256
+  dropout_rate: 0.5
+
+classifier_param:
+  num_class: 3
+  hidden_size: 64
+  dropout_rate: 0.5
+
+transformer_param:
+  n_head : 4
+  num_layers: 3
+  dim_feedforward: 2048
+  dropout: 0.2
 
 
 lstm_param:
-  dropout: 0.5
+  dropout: 0.3 # too much dropout in lstm breaks it
   num_layers: 3
+  size: 512
+  bi_direction: False
 

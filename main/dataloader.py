@@ -10,11 +10,13 @@ import dgl
 import json
 import sys
 import nltk
-nltk.download('punkt')
+#nltk.download('punkt')
 import pickle
 import random
 import torch
+from PIL import Image
 import torch.nn as nn
+import torchvision.transforms as transforms
 sys.path.append('../histocartography/histocartography')
 sys.path.append('../histocartography')
 
@@ -45,13 +47,19 @@ class DiagnosticDataset(Dataset):
             base_data_path: str = None,
             graph_path: str = None,
             vocab_path: str = None,
+            load_all: bool = True,
             load_in_ram: bool = False,
+            mode: str = "train", # train, eval
             ):
         # load data
         super(DiagnosticDataset, self).__init__()
         self.graph_path = graph_path
         self.split = split # Train Test Eval
+        self.mode = mode
+        if split != "train":
+            self.mode = "eval"
         self.base_data_path = base_data_path
+        self.load_all = load_all
         self.load_in_ram = load_in_ram
         self.vocab_path = vocab_path
         self.cg_path = os.path.join(self.graph_path,"cell_graphs",self.split)
@@ -65,6 +73,7 @@ class DiagnosticDataset(Dataset):
         # self.START_TOKEN = self.vocab.word2idx['<start>']
         self.END_TOKEN = self.vocab.word2idx['<end>']
         self.PAD_TOKEN = self.vocab.word2idx['<pad>'] # PAD_TOKEN is used for not supervison
+        self.START_TOKEN = self.vocab.word2idx['<start>']
         self.max_length = 90
         self.vocab_size = len(self.vocab.word2idx)
         self.num_feature = 6
@@ -79,7 +88,8 @@ class DiagnosticDataset(Dataset):
         self.assign_mat = self.get_assign_mat()
 
         self.get_captions_labels(self.img_path,self.split)
-    
+        self.img = self.get_img(self.img_path,self.split)
+
 
     '''
     Get the captions and the labels
@@ -87,23 +97,41 @@ class DiagnosticDataset(Dataset):
     - List of image name
     - Split: train, test, eval
     '''
+    def get_img(self,img_path,split):
+        #print(os.path.join(img_path,"Images",split,"*.png"))
+        img_list =  glob(os.path.join(img_path,"*.png"))
+        img_list.sort()
+        img_name = [os.path.splitext(os.path.split(i)[-1])[0]  for i in img_list]
+        graph_name = [os.path.splitext(os.path.split(i)[-1])[0]  for i in self.list_cg_path]
+        final_img_list = []
+        for idx,value in enumerate(img_list):
+            if img_name[idx] in graph_name:
+                final_img_list.append(value)
+        return final_img_list
+
+       
     def get_captions_labels(self,img_path, split):
         list_name = glob(img_path+"/*.png")
         image_names = [os.path.splitext(os.path.split(i)[-1])[0]  for i in list_name]
-       
         image_file_paths = [os.path.join(self.img_path,self.split,i) for i in image_names]
         with open(self.report_path, 'r') as json_file:
             report_data = json.load(json_file)
         sorted_report = {key: report_data[key] for key in sorted(report_data)}
-        self.captions = [sorted_report[key]['caption'] for key in image_names if key in sorted_report.keys()]
-        self.labels = [sorted_report[key]['label'] for key in image_names if key in sorted_report.keys()]
+ 
+        list_sorted_key = [path.split("/")[-1].replace('.bin','') for path in self.list_cg_path]
 
-            
+        self.captions = [sorted_report[key]['caption'] for key in image_names if key in  list_sorted_key]
+        self.labels = [sorted_report[key]['label'] for key in image_names if key in  list_sorted_key]
+        for idx,value in enumerate(self.labels):
+            if value == 0 or value ==3:
+                self.labels[idx] = 0
+  
     def get_cell_graph(self):
         # print(f"CG PATH IS {self.cg_path}")
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
         #print(len(self.list_cg_path))
         self.list_cg_path.sort()
+
         self.num_cg = len(self.list_cg_path)
         cell_graphs = None
         if self.load_in_ram:
@@ -115,8 +143,10 @@ class DiagnosticDataset(Dataset):
         #print(f"TG PATH IS {self.tg_path}")
         self.list_tg_path = glob(os.path.join(self.tg_path, '*.bin'))
         self.list_tg_path.sort()
+
         self.num_tg = len(self.list_tg_path)
         tissue_graphs = None
+
         if self.load_in_ram:
             tissue_graphs = [load_graphs(single_tg_path) for single_tg_path in self.list_tg_path]
             tissue_graphs = [entry[0][0] for entry in tissue_graphs]
@@ -136,49 +166,73 @@ class DiagnosticDataset(Dataset):
             ]
     def get_cap_and_token(self, caption):
  #   Process cations and labels
+
+
         sentences = caption.rstrip('.').replace(',','').split('. ')
         caption_tokens = [] # convert to tokens for all num_feature sentences
-
-        # print(f"CAPTION IS {sentences}")
-        # print(f"\n")
-        for s, sentence in enumerate(sentences):
+        clean_sentences = sentences
+        '''
+        If we want not the have the final sentence use sentences[:-1]
+        '''
+        for s, sentence in enumerate(sentences[:-1]):
             #   if feature (except conclusion) is insufficient information, do not output it
             #   but the conclusion (last one) is insufficient information, we still output it
-            if 'insufficient' in sentence and s < (len(sentences)-1): 
+            # if 'ins' in sentence:
+            #     print(f"{sentence} - s is {s}")
+            if 'insufficient information' in sentence and s < (len(sentences)-1): 
+                # print(f"    get here!!! {sentence[s]}")
+                clean_sentences[s] = ' '
                 continue
             tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
-            #print(f"    At loop, sentence is {sentence}")
-            sentences[s] = sentence + ' <end>'
-            #   tokens.append('<end>') # add stop indictor
-            tokens.append('<end>')
+            clean_sentences[s] = sentence + ' <end>'
+
+            tokens.append('<end>')  # add stop indictor
             tmp = [self.vocab(token) for token in tokens]
             caption_tokens.append(tmp)
+        current_masks = torch.zeros(self.max_length, dtype=torch.bool)
         #   Add Padding if necessary
-        caption_tokens = [item for sublist in caption_tokens for item in sublist]
+        caption_tokens = [item for sublist in caption_tokens for item in sublist] 
         if len(caption_tokens) < self.max_length:
-            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens))
-            caption_tokens = caption_tokens + padding
-        # print(f"------------caption_tokens-----------------")
-        # print(caption_tokens)
-        # print(len(caption_tokens))
-        # print(f"------------caption_tokens-----------------")
-        caption = ' '.join(sentences) + ''
-        return caption_tokens, caption
+            current_masks[len(caption_tokens):] = True
+            padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens)-1)
+            caption_tokens = [self.START_TOKEN]+caption_tokens + padding
+        caption = ' '.join(clean_sentences) + ''
+        return caption_tokens, caption,current_masks
 
     '''
     Made changes, train with all 5 captions together
     '''
     def __getitem__(self,index):
         # return the cell graph, tissue graph, assignment matrix and the relevant 1 captions
-        cap_id_in_img = index % 5
-        #cap_id_in_img = random.randint(0, 4)
-        graph_id = int(index / 5)
+        '''
+        graph_id = index
+        cap_id_in_img = random.randint(0, 4)
+        '''
+        if self.mode == "train":
+            #cap_id_in_img = index % 5
+            #graph_id = int(index / 5)
+            graph_id = index
+            cap_id_in_img = random.randint(0, 4)
+        else:            
+            graph_id = index
+            cap_id_in_img = None
+        image = Image.open(self.img[graph_id]).convert('RGB')
+        transform = transforms.Compose([
+            transforms.Resize((500,500)),
+            transforms.ToTensor(),
+        ])
+
+        # Apply the transformation to the image
+        image = transform(image)
+
         label = self.labels[graph_id]
+        attention_masks = []
+
         return_caption_tokens = None
         #   pprevious code where in training, load one by one
-        if self.split == "train":
+        if self.mode == "train" and self.load_all is True:
             caption = self.captions[graph_id][cap_id_in_img]
-            caption_tokens, caption = self.get_cap_and_token(caption)
+            caption_tokens, caption,current_masks = self.get_cap_and_token(caption)
             return_caption_tokens = torch.tensor(caption_tokens).long()
         else :
 
@@ -187,7 +241,7 @@ class DiagnosticDataset(Dataset):
             caption_tokens = []
             for i in unclean_captions:
 
-                caption_token , cap = self.get_cap_and_token(i)
+                caption_token , cap,current_masks = self.get_cap_and_token(i)
                 #print(f"with graph_id {graph_id} capto is {caption_token}")
                 caption.append(cap)
                 caption_tokens.append(torch.tensor(caption_token).long())
@@ -207,7 +261,6 @@ class DiagnosticDataset(Dataset):
 
         '''
             
-        # print(f"Caption is {caption} ---- and --- {sentences}")
         # 1. Hierarchical Graphs
         if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
             if self.load_in_ram:
@@ -231,7 +284,8 @@ class DiagnosticDataset(Dataset):
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
             #print(len(caption_tokens))
-            return cg,tg,assign_mat, return_caption_tokens, label, caption
+            #print(f"img size {image.shape} typ")
+            return cg,tg,assign_mat, return_caption_tokens, label, caption, image
             #return cg,tg,assign_mat, torch.stack(caption_tokens), label, caption
         
         #   Use only tissue graph
@@ -242,7 +296,7 @@ class DiagnosticDataset(Dataset):
                 tg, _ = load_graphs(self.list_tg_path[index])
                 tg = tg[0]
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
-            return tg, assign_mat, torch.tensor(caption_tokens).long(), label, caption
+            return tg, assign_mat, torch.tensor(caption_tokens).long(), label, caption, image
 
         #   Use only cell graph
         else:
@@ -252,19 +306,20 @@ class DiagnosticDataset(Dataset):
                 cg, _ = load_graphs(self.list_cg_path[graph_id])
                 cg = cg[0]
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
-            return cg, assign_mat, torch.tensor(caption_tokens).long(), label, caption
+            return cg, assign_mat, torch.tensor(caption_tokens).long(), label, caption, image
     
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-
-        if self.split == "train":
-            return len(self.cg)*5
-        else :
-            return len(self.cg)
+        # if self.split == "train" and self.load_all is True:
+        #     return len(self.cg)*5
+        # else :
+        return len(self.cg)
         ''' 
         return len(self.cg)
         '''
+
+
 
 
 def collate(batch):
@@ -289,6 +344,8 @@ def collate(batch):
     batch_collated[1] = dgl.batch(batch_collated[1])
     batch_collated[3] = torch.stack(batch_collated[3])
     batch_collated[4] = torch.tensor(batch_collated[4])
+    batch_collated[6] = torch.stack(batch_collated[6])
+    # batch_collated[7] = torch.stack(batch_collated[7])
     return batch_collated
 
 def make_dataloader(
@@ -300,18 +357,26 @@ def make_dataloader(
         load_in_ram = False,
         shuffle=True,
         num_workers=0,
+        sampler = None,
+        mode=  "train"
     ):
     """
     Create a BRACS data loader.
     """
+
 
     dataset = DiagnosticDataset(
                 split = split,
                 base_data_path = base_data_path,
                 graph_path = graph_path,
                 vocab_path = vocab_path,
-                load_in_ram = load_in_ram
+                load_in_ram = load_in_ram,
+                mode = mode
             )
+        #   add sampling
+    # dataset_size = len(dataset)
+    # indices = list(range(dataset_size)) 
+    # sampler = SubsetRandomSampler(indices)
     dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
@@ -319,48 +384,72 @@ def make_dataloader(
             num_workers=num_workers,
             collate_fn=collate
         )
-    return dataloader
+    return dataloader,dataset
+def dataset_to_loader(dataset,batch_size,sampler,shuffle = True, num_workers = 0):
+    return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            collate_fn=collate,
+            sampler = sampler
+        )
 
 if __name__ == "__main__":
     import os
-
-    loader = make_dataloader(
-        batch_size = 2,
-        split = "test",
-        base_data_path = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi",
+    split = "train"
+    splits = ["train","test","eval"]
+    loader,_ = make_dataloader(
+        batch_size = 16,
+        split = split,
+        base_data_path = "../../../../../../srv/scratch/bic/peter/Report",
         graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
         vocab_path = "vocab_bladderreport.pkl",
         shuffle=True,
         num_workers=0,
         load_in_ram = True
     )
+    print(f"length data loader for {split} is {len(loader)}")
+    for batch_idx, batch_data in enumerate(loader):
+    # Your batch processing code here
+        cg, tg, assign_mat, caption_tokens, labels, caption, images,attention_masks = batch_data
+        print(f"------")
+        print(caption)
+        for i in caption:
+            print(i)
+            print(" --- ")
+        # print(f"caption token {caption_tokens.shape}")
+        # print(f"attention masks {attention_masks.shape}")
+        break
 
-    # for word, idx in loader.dataset.vocab.word2idx.items():
-    #     print(f"Word: {word}, Index: {idx}")
-    cg,tg,am,cap_to, label, cap = next(iter(loader))
-    print(cap_to.shape)
-    print(cap_to)
-
-    print("-----------")
-    for i in cap:
-        print(i)
-        print("--next sentence--")
-    # total_batches = len(loader)
-
-    # # print(f"Total batches: {total_batches}")
-    # # idx = a[0]
-    # # batch_data = a[1]
-    # # print(f"idx is {idx} and data is {type(batch_data)} length {len(batch_data)}")
-    # # for i in batch_data:
-    # #     print(type(i))
-    # for batch_idx, batch_data in enumerate(loader):
-    #     # Your batch processing code here
-    #     cg, tg, assign_mat, caption_tokens, label, caption = batch_data
-    
-        # for idx,value in enumerate(caption):
-        #     print(value)
-        #     print(caption_tokens[idx])
-        #     print("------------------------------")
-        # break
-    
+    # for sp in splits:
+    #     loader,_ = make_dataloader(
+    #         batch_size = 16,
+    #         split = sp,
+    #         base_data_path = "../../../../../../srv/scratch/bic/peter/Report",
+    #         graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
+    #         vocab_path = "vocab_bladderreport.pkl",
+    #         shuffle=True,
+    #         num_workers=2,
+    #         load_in_ram = True
+    #     )
+    #     one = 0
+    #     zero = 0
+    #     two = 0
+    #     for batch_idx, batch_data in enumerate(loader):
+    #         # Your batch processing code here
+    #         cg, tg, assign_mat, caption_tokens, labels, caption, images = batch_data
+    #         for j in labels:
+    #             if j == 0:
+    #                 zero += 1
+    #             elif j == 1:
+    #                 one += 1
+    #             elif j == 2:
+    #                 two += 1
+    #             else:
+    #                 print(f"     j is {j}")
+    #     print(f"--------{sp}----------")
+    #     print(f"Label 0: Normal/Insuff is {zero}")
+    #     print(f"Label 1: Low Grade is {one}")
+    #     print(f"Label 2: High Grade is {two}")
+            
  

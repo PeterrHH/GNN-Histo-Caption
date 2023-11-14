@@ -8,10 +8,11 @@ from dgl.nn import GraphConv, GATConv, SAGEConv, GINConv, PNAConv, MaxPooling, A
 #   Graph Pooling Opeartion
 from torch_geometric.nn import dense_diff_pool, dense_mincut_pool
 from torch_geometric.nn.norm import GraphNorm, BatchNorm
+import torchvision
 import dgl
 import h5py
 import sys
-from Vocabulary import Vocabulary
+
 
 
 
@@ -22,7 +23,7 @@ import torch.nn as nn
 Output: torch.Tensor([batch_size,feature_bedding_size])
 '''
 class GNNEncoder(nn.Module):
-    def __init__(self, args, cg_layer, tg_layer, aggregate_method, input_feat = 514,output_size = 128):
+    def __init__(self, args, cg_layer, tg_layer, aggregate_method, input_feat = 514,hidden_size=256,output_size = 128,num_classes = 3):
         super().__init__()
         self.conv_map = {
             "GCN": GraphConv,
@@ -39,7 +40,7 @@ class GNNEncoder(nn.Module):
         self.cell_conv_method = self.args["gnn_param"]["cell_conv_method"]
         self.tissue_conv_method = self.args["gnn_param"]["tissue_conv_method"]
         self.input_feat = input_feat
-        self.hidden_feat = 256
+        self.hidden_feat = hidden_size
         self.aggregate_method = aggregate_method
         self.cg_layer = cg_layer
         self.tg_layer = tg_layer
@@ -47,8 +48,6 @@ class GNNEncoder(nn.Module):
         self.selected_cell_conv_method = None
         self.selected_tissue_conv_method = None
         self.selected_pool_method = None
-        self.cell_layers = nn.ModuleList()
-        self.tissue_layers = nn.ModuleList()
         self.cell_batch_norms = nn.ModuleList()
         self.tissue_batch_norms = nn.ModuleList()
         self.cell_graph_norms = nn.ModuleList()
@@ -56,6 +55,10 @@ class GNNEncoder(nn.Module):
         self.pooling = nn.ModuleList()
         self.cg_to_tg_aggregate = None
         self.tg_readout_aggregate = None
+        self.feature_extractor = torchvision.models.resnet34(pretrained=True)
+
+        # self.weight_cell = nn.Parameter((1,1,self.hidden_feat),requires_grad = True)
+        # self.weight_tissue = nn.Parameter((1,1,self.hidden_feat), requires_grad = True)
 
         # if cell_conv_method in self.conv_map:
         #     self.selected_cell_conv_method = self.conv_map[cell_conv_method]
@@ -76,15 +79,16 @@ class GNNEncoder(nn.Module):
                 self.cell_layer.append(
                     nn.Sequential(
                         self.get_gm(self.cell_conv_method,self.input_feat,self.hidden_feat),
-                        GraphNorm(self.hidden_feat),
+                        # GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
             else:
                 self.cell_layer.append(
                     nn.Sequential(
-                        self.get_gm(self.cell_conv_method,self.hidden_feat,self.hidden_feat),
-                        GraphNorm(self.hidden_feat),
+                        #self.get_gm(self.cell_conv_method,self.hidden_feat,self.hidden_feat),
+                        self.selected_cell_conv_method,
+                        # GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
@@ -93,32 +97,23 @@ class GNNEncoder(nn.Module):
                 self.tissue_layer.append(
                     nn.Sequential(
                         self.get_gm(self.tissue_conv_method,self.hidden_feat+self.input_feat,self.hidden_feat),
-                        GraphNorm(self.hidden_feat),
+                        #GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
             else:
                 self.tissue_layer.append(
                     nn.Sequential(
-                        self.get_gm(self.tissue_conv_method,self.hidden_feat,self.hidden_feat),
-                        GraphNorm(self.hidden_feat),
+                        #self.get_gm(self.tissue_conv_method,self.hidden_feat,self.hidden_feat),
+                        self.selected_tissue_conv_method,
+                        #GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
-        self.conv1 = GraphConv(514,514)
-        self.gn = GraphNorm(514)
-        self.bn = BatchNorm(514)
-        self.cell_lin_out = nn.Linear(514,256)
-        # self.conv2 = GraphConv(514,514)
-        # self.maxpool = MaxPooling()
- 
-        self.t_conv1 = GraphConv(1028,514)
-        self.gn = GraphNorm(514)
-        self.bn = BatchNorm(514)
-        # self.conv2 = GraphConv(514,514)
-        self.maxpool = MaxPooling()
-        self.lin_out = nn.Linear(self.hidden_feat,self.output_size)
 
+        self.lin_out = nn.Linear(self.hidden_feat,self.output_size)
+        self.img_downsample = nn.Linear(1000,self.output_size)
+        self.softmax =  nn.Linear(output_size*2, num_classes)
         '''
         Each Layer contains:
         - Message Passing
@@ -160,7 +155,22 @@ class GNNEncoder(nn.Module):
         cat = torch.cat(ll_h_concat, dim=0)
        # print(f"cat size {cat.shape}")
        # print(f"tg_feat size {tg_feat.shape}")
+        # return self.weight_cell * cat + self.weight_tissue * tg_feat
         return torch.cat((cat, tg_feat), dim=1)
+    
+    '''
+    num_nodes_per_graph = tissue_graph.batch_num_nodes().tolist()
+        num_nodes_per_graph.insert(0, 0)
+        intervals = [sum(num_nodes_per_graph[:i + 1])
+                     for i in range(len(num_nodes_per_graph))]
+    ll_h_concat = []
+    for i in range(1, len(intervals)):
+        torch_matmul(assignment_mat[i-1].t(),tg_feat[intervals[i-1]:intervals[i],:])
+        ll_h_concat.append(h_agg)
+    cat = torch.caat(ll_h_concat, dim = 0)
+    return troch.cat((cat,cg_feat),dim = 1)
+
+    '''
 
 
     def readout(self,tissue_graph,x):
@@ -178,8 +188,9 @@ class GNNEncoder(nn.Module):
         aggregated_features = pool(tissue_graph,x)
         return aggregated_features
     
-    def forward(self,cell_graph,tissue_graph,assignment_mat):
-
+    def forward(self,cell_graph,tissue_graph,assignment_mat,image):
+        # img_feat = self.feature_extractor(image)
+        # img_feat = self.img_downsample(img_feat)
         # #   Cell Aggregation, gets all the features in a cell
         # #   Original paper of HACT_NET use lstm connection
         cell_feat = cell_graph.ndata['feat']
@@ -192,7 +203,7 @@ class GNNEncoder(nn.Module):
             #print(f"Convolution {cell_feat.shape}")
             cell_feat = layer[1](cell_feat)
             #print(f"Graph Norm {cell_feat.shape}")
-            cell_feat = layer[2](cell_feat)
+            # cell_feat = layer[2](cell_feat)
             #print(f"Batch Norm {cell_feat.shape}")
         # cell_feat = self.conv1(cell_graph,cell_feat)
         # cell_feat = self.gn(cell_feat)
@@ -212,23 +223,28 @@ class GNNEncoder(nn.Module):
         # # print(f"X shape {x.shape}")
         # print("-------------cell_feat ------------")
         # print("------------- Assignment Sum ------------")
+        
         x = self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat)
         # print(f"If there is Nan in After Aggregation {torch.any(torch.isnan(x))}")
         # print("------------- Assignment Sum------------")
         # print(f"SUM TISSUE FEAT SHAPE {x.shape}")
+        
         for layer in self.tissue_layer:
             x = layer[0](tissue_graph,x)
             x = layer[1](x)
-            x = layer[2](x)
-        # x = F.relu(x)
-        #print(f"after tissue layer shape is {x.shape}")
-       # print(f"If there is Nan After Tissue Layer {torch.any(torch.isnan(x))}")
+            # x = layer[2](x)
         x = self.lin_out(x)
+
         x = self.readout(tissue_graph,x)
+        # print(f"x before cat shape {x.shape}")
+        # x = torch.cat((x, img_feat), dim=1)
+        # print(f"x after cat shape {x.shape}")
+        # pred = self.softmax(x)
+
         if torch.any(torch.isnan(x)) == True:
             pass
-
-        return x.unsqueeze(1)
+        x = F.normalize(x, p=2, dim=1)
+        return x
     
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
@@ -253,7 +269,7 @@ if __name__ == "__main__":
     #a = next(iter(loader))
     for batched_idx, batch_data in enumerate(loader):
         cg, tg, assign_mat, caption_tokens, label,caption = batch_data  
-        encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 256)
+        encoder = GNNEncoder(cell_conv_method = "GCN", tissue_conv_method = "GCN", pool_method = None, num_layers = 3, aggregate_method = "sum", input_feat = 514,output_size = 512)
         # out = encoder(cg,tg,assign_mat)
         # print(f"length is {len(assign_mat)}")
         # print(f"Outputshape is {out.shape}")

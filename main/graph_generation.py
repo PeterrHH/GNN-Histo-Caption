@@ -69,7 +69,7 @@ class GraphBuilding:
         # than 50 pixels. Add image size-normalized centroids to the node features.
         # For e.g., resulting node features are 512 features from ResNet34 + 2
         # normalized centroid features.
-        self.knn_graph_builder = KNNGraphBuilder(k=5, thresh=50, add_loc_feats=True)
+        self.knn_graph_builder = KNNGraphBuilder(k=5, thresh=50, add_loc_feats=True) 
     
     def tissue_graph_builder(self):
         # a define nuclei extractor    
@@ -276,13 +276,15 @@ class GraphBuilding:
 
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
-    folder = "../../../../../../srv/scratch/bic/peter/Report-nmi-wsi/Images"
+    print(f"starting")
+    folder = "../../../../../../srv/scratch/bic/peter/Report/Images"
     target = "./target_img/target.png"
+    store_path = "../../../../../../srv/scratch/bic/peter/full-graph"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
-    GB.build(folder,"graph","test")
-    GB.build(folder,"graph","train")
-    GB.build(folder,"graph","eval")
+    GB.build(folder,store_path,"test")
+    GB.build(folder,store_path,"train")
+    GB.build(folder,store_path,"eval")
     # ne = NucleiExtractor()
     
     # Graph are bin file, Assignment mat is h5 file

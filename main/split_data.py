@@ -17,7 +17,7 @@ dataset_path = config_data["dataset_path"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_path', type = str, 
-        default = "../../Report-nmi-wsi", help = "Path to Dataset")
+        default = "../../../../../../srv/scratch/bic/peter/Report", help = "Path to Dataset")
 args = parser.parse_args()
 if args.dataset_path:
     dataset_path = args.dataset_path

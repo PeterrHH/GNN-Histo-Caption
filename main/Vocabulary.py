@@ -25,4 +25,6 @@ class Vocabulary(object):
     def print_all_words(self):
         for idx, word in self.idx2word.items():
             print(f"key {idx}: {word}")
+
+
     

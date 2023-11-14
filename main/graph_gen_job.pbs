@@ -1,6 +1,6 @@
 #PBS -N GNN_trial
-#PBS -l select=1:ncpus=1:ngpus=1:mem=16gb
-#PBS -l walltime=12:00:00
+#PBS -l select=1:ncpus=2:ngpus=2:mem=124gb
+#PBS -l walltime=10:00:00
 #PBS -j eo
 #PBS -m abe
 #PBS -M pacers0406@gmail.com
@@ -8,4 +8,4 @@
 pwd
 cd ~/Desktop/venv/GNN-Histo-Caption/main
 module load python/3.10.8
-python3 -u k_fold_train.py
+python3 -u graph_generation.py

@@ -168,3 +168,6 @@ main/full-graph/*
 main/graph 1/*
 main/wandb/*
 GNN_trial.*
+main/Saved_model/*
+main/*.bin
+main/*.txt
