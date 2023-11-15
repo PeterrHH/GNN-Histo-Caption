@@ -10,6 +10,7 @@ weight_decay: 0.005
 phase: train # train, test, eval
 epochs: 100
 decoder_type: "LSTM" # Transformer, LSTM
+encoder: "CNN-GraphSage"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 optimizer_type: "Adam" # Adam, SGD
 batch_size: 8
