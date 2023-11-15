@@ -15,20 +15,6 @@
 #     test_output[key].append(1)
 # print(test_output)
 
-<<<<<<< HEAD
-
-# for key, values in test_output.items():
-#     mean_value = np.mean(values)  # Calculate the mean using np.mean
-#     std_value = np.std(values)  
-#     test_output[key] = [mean_value,std_value] # Store the mean in the new dictionary
-# print(test_output)
-a = {
-
-}
-a["1"] = "abc"
-a["2"] = "eff"
-print(a)
-=======
 
 # for key, values in test_output.items():
 #     mean_value = np.mean(values)  # Calculate the mean using np.mean
@@ -53,4 +39,3 @@ with open(file_path, 'r') as file:
     data = json.load(file)
 
 print(len(data.keys()))
->>>>>>> update model

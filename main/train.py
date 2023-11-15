@@ -435,6 +435,17 @@ def main():
         torch.cuda.manual_seed_all(seed)
     #   make the dl here
     #   !!!!!!!!!!! Change it back to train
+    train_eval_dl,_ = make_dataloader(
+        batch_size = args["batch_size"],
+        split = "train",
+        base_data_path = args["dataset_path"],
+        graph_path = args["graph_path"],
+        vocab_path = args["vocab_path"],
+        shuffle=True,
+        num_workers=0,
+        load_in_ram = True,
+        mode = "eval"
+    )
     train_dl,_ = make_dataloader(
         batch_size = args["batch_size"],
         split = "train",
@@ -499,7 +510,9 @@ def main():
                 "epoch": args["epochs"],
                 "batch_size": args["batch_size"],
                 "num_param":len(all_params),
-                "loss":args["loss"]
+                "loss":args["loss"],
+                "encoder":args["encoder"],
+                "decoder":args["decoder_type"],
             }
         )
         total_samples = len(train_dl)
@@ -583,21 +596,35 @@ def main():
                                                       decoder,
                                                       global_feature_extractor,
                                                       classifier,
-                                                      DEVICE,889, criterion,vocab_size,labels)
+                                                      DEVICE, args["batch_size"], criterion,vocab_size,labels)
+            
+            train_scores, train_loss, train_accuracy, train_f1_score = eval(train_eval_dl,
+                                                      encoder,
+                                                      attention,
+                                                      decoder,
+                                                      global_feature_extractor,
+                                                      classifier,
+                                                      DEVICE,args["batch_size"], criterion,vocab_size,labels)
 
             eval_output = {
-                'train_cap_loss':mean_loss,
+                'train_cap_loss':train_loss,
                 'eval_cap_loss':eval_loss,
-                'bleu1':scores['Bleu1'],
-                'bleu2':scores['Bleu2'],
-                'bleu3':scores['Bleu3'],
-                'bleu4':scores['Bleu4'],
-                'meteor':scores['METEOR'],
-                'rouge':scores['ROUGE_L'],
-                'cider':scores['CIDEr'],
+                'eval_bleu1':scores['Bleu1'],
+                'eval_bleu4':scores['Bleu4'],
+                'eval_meteor':scores['METEOR'],
+                'eval_rouge':scores['ROUGE_L'],
+                'eval_cider':scores['CIDEr'],
                 #'spice':scores['SPICE'],
-                'accuracy':accuracy,
-                'f1_score':f1_score,
+                'eval_accuracy':accuracy,
+                'eval_f1_score':f1_score,
+                'train_bleu1':train_scores['Bleu1'],
+                'train_bleu4':train_scores['Bleu4'],
+                'train_meteor':train_scores['METEOR'],
+                'train_rouge':train_scores['ROUGE_L'],
+                'train_cider':train_scores['CIDEr'],
+                #'spice':scores['SPICE'],
+                'train_accuracy':train_accuracy,
+                'train_f1_score':train_f1_score,
             }
             wandb.log(eval_output)
             print(f"!!!At epoch [{str(epoch+1)}/{args['epochs']}] evaluate results is {eval_output}")

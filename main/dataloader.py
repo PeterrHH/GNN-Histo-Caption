@@ -69,6 +69,7 @@ class DiagnosticDataset(Dataset):
         self.report_file_name = split+"_annotation.json"
         self.report_path = os.path.join(self.base_data_path,self.report_file_name)
         self.vocab = pickle.load(open(self.vocab_path,'rb'))
+
         # self.vocab.add_word('<start>')
         # self.START_TOKEN = self.vocab.word2idx['<start>']
         self.END_TOKEN = self.vocab.word2idx['<end>']
@@ -129,7 +130,6 @@ class DiagnosticDataset(Dataset):
     def get_cell_graph(self):
         # print(f"CG PATH IS {self.cg_path}")
         self.list_cg_path = glob(os.path.join(self.cg_path, '*.bin'))
-        #print(len(self.list_cg_path))
         self.list_cg_path.sort()
 
         self.num_cg = len(self.list_cg_path)

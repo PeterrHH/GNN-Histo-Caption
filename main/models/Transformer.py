@@ -31,7 +31,7 @@ class TransformerDecoder(nn.Module):
             num_layers
         )
         self.fc_out = nn.Linear(d_model, vocab_size)
-        self.start_token = 119
+        self.start_token = 119 # Default
 
     def forward(self, memory, tgt):
         # print(f"memory shape {memory.shape} tgt shape {tgt.shape}")
@@ -43,6 +43,7 @@ class TransformerDecoder(nn.Module):
         #print(f"    min index in tgt: {torch.min(tgt)}, max index in tgt: {torch.max(tgt)}")
         memory = memory.unsqueeze(0)
         tgt = tgt.permute(1,0,2)
+        print(f"    pos_encoder, tgt shape {tgt.shape} mem shape {memory.shape}")
         output = self.transformer_decoder(tgt, memory)
 
         #print(f"    transformer, tgt shape {output.shape}")
@@ -52,20 +53,48 @@ class TransformerDecoder(nn.Module):
     
 
     def predict(self,memory, max_len = 90):
-        current_token = [self.start_token]
+        batch_size = memory.shape[0]
+        current_token = [self.start_token]*batch_size
+        memory = memory.unsqueeze(0)
 
+        final_output = torch.zeros(batch_size, max_len, dtype=torch.long)  
+        print(f"fianl shape {final_output.shape}")     
+        final_output[:,0] = torch.LongTensor(current_token)
+ 
+        outputs_tensor = torch.zeros((batch_size, max_len, self.vocab_size))
+        outputs_tensor[:, 0, 119] = 1
+        #outputs_tensor[:,0,:] = torch.LongTensor(current_token)
         for i in range(max_len-1):
+            print(final_output[:,:(i+1)].permute(1,0).shape)
+            # print(current_token.shape)
             input_tensor = torch.LongTensor(current_token).unsqueeze(0)
+            print(input_tensor.shape)
             input_tensor = self.embedding(input_tensor) * math.sqrt(self.d_model)
             input_tensor = self.pos_encoder(input_tensor)
 
 
-            memory = memory.unsqueeze(0)
-            input_tensor = input_tensor.permute(1, 0, 2)
 
+            # input_tensor = input_tensor.permute(1, 0, 2)
+            print(f"input ten {input_tensor.shape} mem {memory.shape}")
             # Forward pass through the decoder
             output = self.transformer_decoder(input_tensor, memory)
             output = self.fc_out(output)
+            print(output.shape)
+            outputs_tensor[:,i+1,:] = output
+            max = torch.argmax(output,dim = 2)
+            print(max)
+            final_output[:,i+1] = torch.LongTensor(max).cpu()
+            # break
+        return final_output,outputs_tensor
 
 
-        pass
+if __name__ == "__main__":
+    decoder = TransformerDecoder( vocab_size = 120, d_model = 512,        
+        nhead = 2, 
+        num_layers = 3, 
+        dim_feedforward=2048, 
+        dropout=0.2)
+    x = torch.rand(2,512) 
+    cap_tok = torch.rand(2,90) 
+    decoder(x,cap_tok.long())
+    decoder.predict(x)

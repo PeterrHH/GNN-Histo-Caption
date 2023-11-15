@@ -534,8 +534,9 @@ def main():
                 encoder,decoder,attention,total_loss = train_epoch(train_loader,args["batch_size"],DEVICE,encoder,decoder,attention,global_feature_extractor,criterion,all_params,optimizer,vocab_size)
                 mean_loss = np.mean(total_loss)
                 print(f"Epoch {str(epoch+1)}: train loss is {mean_loss}")
-
+                
                 del total_loss
+   
             scores,eval_loss = eval(eval_dl,encoder,attention,global_feature_extractor,decoder,DEVICE,889,criterion,vocab_size)
 
             eval_output = {
@@ -557,7 +558,7 @@ def main():
                     encoder_name = f"Gsage_encoder_epoch{str(epoch+1)}.pt"
                     decoder_name = f"Gsage_LSTM_decoder_epoch{str(epoch+1)}.pt"
                     save_model_to_path(epoch, encoder, args["encoder_path"],decoder, args["decoder_path"], encoder_name,decoder_name)
-
+            del eval_loss
             torch.cuda.empty_cache()
 
         scores,_ = eval(test_dl,encoder,attention,decoder, DEVICE, args["batch_size"],criterion,vocab_size,eval = False)

@@ -8,4 +8,4 @@
 pwd
 cd ~/Desktop/venv/GNN-Histo-Caption/main
 module load python/3.10.8
-python3 -u k_fold_train.py
+python3 -u train.py
