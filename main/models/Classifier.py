@@ -18,8 +18,13 @@ class Classifier(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(self.input_size, hidden_size),  
             nn.ReLU(),    
-            nn.Dropout(dropout_rate),            
+            nn.Dropout(dropout_rate), 
+            nn.Linear(hidden_size, 64),  # Hidden layer
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),           
             nn.Linear(hidden_size,num_class)  
+            # nn.Linear(self.input_size, num_class),
+            # nn.Dropout(dropout_rate)
         )
 
 

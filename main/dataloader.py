@@ -174,16 +174,17 @@ class DiagnosticDataset(Dataset):
         '''
         If we want not the have the final sentence use sentences[:-1]
         '''
-        for s, sentence in enumerate(sentences[:-1]):
+        for s, sentence in enumerate(sentences):
             #   if feature (except conclusion) is insufficient information, do not output it
             #   but the conclusion (last one) is insufficient information, we still output it
             # if 'ins' in sentence:
             #     print(f"{sentence} - s is {s}")
             if 'insufficient information' in sentence and s < (len(sentences)-1): 
                 # print(f"    get here!!! {sentence[s]}")
-                clean_sentences[s] = ' '
+                clean_sentences[s] = ''
                 continue
             tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
+            toekns = [word for word in tokens if '.' not in word]
             clean_sentences[s] = sentence + ' <end>'
 
             tokens.append('<end>')  # add stop indictor
@@ -197,6 +198,9 @@ class DiagnosticDataset(Dataset):
             padding = [self.PAD_TOKEN] * (self.max_length - len(caption_tokens)-1)
             caption_tokens = [self.START_TOKEN]+caption_tokens + padding
         caption = ' '.join(clean_sentences) + ''
+        # caption = [string.strip() for string in caption if string.strip()]
+        # print(f"clean sentences:")
+        # print(caption)
         return caption_tokens, caption,current_masks
 
     '''
@@ -209,13 +213,14 @@ class DiagnosticDataset(Dataset):
         cap_id_in_img = random.randint(0, 4)
         '''
         if self.mode == "train":
-            #cap_id_in_img = index % 5
-            #graph_id = int(index / 5)
-            graph_id = index
-            cap_id_in_img = random.randint(0, 4)
+            cap_id_in_img = index % 5
+            graph_id = int(index / 5)
+            # graph_id = index
+            # cap_id_in_img = random.randint(0, 4)
         else:            
             graph_id = index
             cap_id_in_img = None
+        #print(f"graph id {graph_id} len img {len(self.img)}")
         image = Image.open(self.img[graph_id]).convert('RGB')
         transform = transforms.Compose([
             transforms.Resize((500,500)),
@@ -232,7 +237,10 @@ class DiagnosticDataset(Dataset):
         #   pprevious code where in training, load one by one
         if self.mode == "train" and self.load_all is True:
             caption = self.captions[graph_id][cap_id_in_img]
+            #print(f"caption before {caption}")
             caption_tokens, caption,current_masks = self.get_cap_and_token(caption)
+            # print(f"caption after {caption}")
+            attention_masks.append(current_masks)
             return_caption_tokens = torch.tensor(caption_tokens).long()
         else :
 
@@ -242,6 +250,7 @@ class DiagnosticDataset(Dataset):
             for i in unclean_captions:
 
                 caption_token , cap,current_masks = self.get_cap_and_token(i)
+                attention_masks.append(current_masks[0])
                 #print(f"with graph_id {graph_id} capto is {caption_token}")
                 caption.append(cap)
                 caption_tokens.append(torch.tensor(caption_token).long())
@@ -285,6 +294,8 @@ class DiagnosticDataset(Dataset):
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
             #print(len(caption_tokens))
             #print(f"img size {image.shape} typ")
+            # print(f"caption in loader below:")
+            # print(caption)
             return cg,tg,assign_mat, return_caption_tokens, label, caption, image
             #return cg,tg,assign_mat, torch.stack(caption_tokens), label, caption
         
@@ -311,13 +322,15 @@ class DiagnosticDataset(Dataset):
     
     def __len__(self): # len(dataloader) self.cg * 5 / batch_size
         assert len(self.cg) == len(self.tg)
-        # if self.split == "train" and self.load_all is True:
-        #     return len(self.cg)*5
-        # else :
-        return len(self.cg)
+
+        if self.mode == "train":
+           return len(self.cg)*5
+        else :
+            return len(self.cg)
         ''' 
         return len(self.cg)
         '''
+
 
 
 
@@ -344,8 +357,12 @@ def collate(batch):
     batch_collated[1] = dgl.batch(batch_collated[1])
     batch_collated[3] = torch.stack(batch_collated[3])
     batch_collated[4] = torch.tensor(batch_collated[4])
+    # print("----------")
+    # print(batch_collated[5])
+    # print("----------")
     batch_collated[6] = torch.stack(batch_collated[6])
-    # batch_collated[7] = torch.stack(batch_collated[7])
+     
+    #batch_collated[7] = torch.stack([ten[0] for ten in batch_collated[7]])
     return batch_collated
 
 def make_dataloader(
@@ -399,23 +416,26 @@ if __name__ == "__main__":
     split = "train"
     splits = ["train","test","eval"]
     loader,_ = make_dataloader(
-        batch_size = 16,
+        batch_size = 2,
         split = split,
         base_data_path = "../../../../../../srv/scratch/bic/peter/Report",
         graph_path = "../../../../../../srv/scratch/bic/peter/full-graph",
         vocab_path = "vocab_bladderreport.pkl",
         shuffle=True,
         num_workers=0,
-        load_in_ram = True
+        load_in_ram = True,
+        mode = "eval"
     )
     print(f"length data loader for {split} is {len(loader)}")
     for batch_idx, batch_data in enumerate(loader):
     # Your batch processing code here
-        cg, tg, assign_mat, caption_tokens, labels, caption, images,attention_masks = batch_data
+        cg, tg, assign_mat, caption_tokens, labels, caption, images= batch_data
         print(f"------")
-        print(caption)
-        for i in caption:
-            print(i)
+        print(caption_tokens.shape)
+        # print(attention_masks)
+        for idx,value in enumerate(caption):
+            print(value)
+            print(caption_tokens[idx])
             print(" --- ")
         # print(f"caption token {caption_tokens.shape}")
         # print(f"attention masks {attention_masks.shape}")

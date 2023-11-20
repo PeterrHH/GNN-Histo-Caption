@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 
+
 import math
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -19,10 +20,12 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:x.size(0), :]
     
 class TransformerDecoder(nn.Module):
-    def __init__(self, vocab_size, d_model, nhead, num_layers, dim_feedforward=2048, dropout=0.1):
+    def __init__(self, vocabs, d_model, nhead, num_layers,dim_feedforward=2048, dropout=0.1,device = "cpu"):
         super(TransformerDecoder, self).__init__()
         self.d_model = d_model
-        self.vocab_size = vocab_size
+        self.vocabs = vocabs
+        self.vocab_size = len(vocabs)
+        self.device = device
         self.embedding = nn.Embedding(self.vocab_size, self.d_model)
         self.pos_encoder = PositionalEncoding(d_model)
         self.word_embedding = nn.Embedding( self.vocab_size , self.d_model)
@@ -30,71 +33,80 @@ class TransformerDecoder(nn.Module):
             nn.TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout),
             num_layers
         )
-        self.fc_out = nn.Linear(d_model, vocab_size)
-        self.start_token = 119 # Default
+        self.fc_out = nn.Linear(d_model, self.vocab_size)
+        self.start_token = self.vocabs.word2idx['<start>'] # Default
+        self.end_token = self.vocabs.word2idx['<end>']
 
+
+
+    '''
+    memory: input embedding : (batch_size, embedding_size)
+    tgt: tgt_size: (batch_size, max_len)
+    '''
     def forward(self, memory, tgt):
-        # print(f"memory shape {memory.shape} tgt shape {tgt.shape}")
-        #print(f"    min index in tgt: {torch.min(tgt)}, max index in tgt: {torch.max(tgt)}")
+        seq_len = tgt.shape[1]
+
+        tgt_mask = nn.Transformer().generate_square_subsequent_mask(seq_len).to(self.device)
         tgt = self.embedding(tgt) * math.sqrt(self.d_model)
-        #print(f"    emb, tgt shape {tgt.shape}")
         tgt = self.pos_encoder(tgt)
-        #print(f"    pos_encoder, tgt shape {tgt.shape} mem shape {memory.shape}")
-        #print(f"    min index in tgt: {torch.min(tgt)}, max index in tgt: {torch.max(tgt)}")
         memory = memory.unsqueeze(0)
         tgt = tgt.permute(1,0,2)
-        print(f"    pos_encoder, tgt shape {tgt.shape} mem shape {memory.shape}")
-        output = self.transformer_decoder(tgt, memory)
 
-        #print(f"    transformer, tgt shape {output.shape}")
+        output = self.transformer_decoder(tgt, memory, tgt_mask = tgt_mask)
+
+
         output = self.fc_out(output)
-        #print(f"    fc out, tgt shape {output.shape}")
+
         return output
     
 
+
+    '''
+    memory: input embedding : (batch_size, embedding_size)
+    '''
     def predict(self,memory, max_len = 90):
         batch_size = memory.shape[0]
-        current_token = [self.start_token]*batch_size
-        memory = memory.unsqueeze(0)
+        outputs_tensor = torch.zeros((batch_size, max_len, self.vocab_size)).to(self.device)
 
-        final_output = torch.zeros(batch_size, max_len, dtype=torch.long)  
-        print(f"fianl shape {final_output.shape}")     
-        final_output[:,0] = torch.LongTensor(current_token)
- 
-        outputs_tensor = torch.zeros((batch_size, max_len, self.vocab_size))
-        outputs_tensor[:, 0, 119] = 1
-        #outputs_tensor[:,0,:] = torch.LongTensor(current_token)
+        generated_words = torch.LongTensor([self.start_token]*batch_size).unsqueeze(1).to(self.device)
+        outputs_tensor[:,0,self.start_token] = 1
         for i in range(max_len-1):
-            print(final_output[:,:(i+1)].permute(1,0).shape)
-            # print(current_token.shape)
-            input_tensor = torch.LongTensor(current_token).unsqueeze(0)
-            print(input_tensor.shape)
-            input_tensor = self.embedding(input_tensor) * math.sqrt(self.d_model)
-            input_tensor = self.pos_encoder(input_tensor)
+     
+
+            with torch.no_grad():
+                output = self.forward(memory, generated_words)
+                print(output.shape)
+            outputs_tensor[:,i+1,:] = output[-1,:,:]
+
+            next_word = torch.argmax(output[-1,:,:],dim = 1).unsqueeze(1)
 
 
+            generated_words = torch.cat((generated_words, next_word), dim=1)
+            print(f"gen words {generated_words}")
 
-            # input_tensor = input_tensor.permute(1, 0, 2)
-            print(f"input ten {input_tensor.shape} mem {memory.shape}")
-            # Forward pass through the decoder
-            output = self.transformer_decoder(input_tensor, memory)
-            output = self.fc_out(output)
-            print(output.shape)
-            outputs_tensor[:,i+1,:] = output
-            max = torch.argmax(output,dim = 2)
-            print(max)
-            final_output[:,i+1] = torch.LongTensor(max).cpu()
-            # break
-        return final_output,outputs_tensor
+            if (next_word == self.end_token).all():
+                break
+
+        return generated_words,outputs_tensor
 
 
 if __name__ == "__main__":
-    decoder = TransformerDecoder( vocab_size = 120, d_model = 512,        
+    from Vocabulary import Vocabulary
+    import pickle
+    with open("new_vocab_bladderreport.pkl", 'rb') as file:
+        vocabs = pickle.load(file)
+    decoder = TransformerDecoder( vocabs = vocabs, d_model = 512,        
         nhead = 2, 
         num_layers = 3, 
         dim_feedforward=2048, 
         dropout=0.2)
     x = torch.rand(2,512) 
     cap_tok = torch.rand(2,90) 
-    decoder(x,cap_tok.long())
-    decoder.predict(x)
+    # decoder(x,cap_tok.long())
+    out,out_ten = decoder.predict(x,5)
+    # print(out.shape)
+
+    print(out)
+    print(out_ten.shape)
+    # print(out[0])
+    # print(out[1])

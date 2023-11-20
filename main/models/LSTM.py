@@ -3,11 +3,12 @@ import torch
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self,vocab_size, embed_size, batch_size, hidden_size,bi_direction, device = "cpu",dropout = 0.5, num_layers = 1):
+    def __init__(self,vocabs,embed_size, batch_size, hidden_size,bi_direction, device = "cpu",dropout = 0.5, num_layers = 1):
         super().__init__()
         assert dropout <= 1
         self.dropout = dropout
-        self.vocab_size = vocab_size
+        self.vocabs = vocabs
+        self.vocab_size = len(self.vocabs)
         self.device = device
         self.embed_size = embed_size
         self.hidden_size = hidden_size
@@ -18,6 +19,8 @@ class LSTMDecoder(nn.Module):
         self.direction_weight = 2 if self.bi_direction else 1
         self.dropout = nn.Dropout(p = self.dropout)
         self.word_embedding = nn.Embedding( self.vocab_size , self.embed_size)
+        self.start_token = self.vocabs.word2idx['<start>'] # Default
+        self.end_token = self.vocabs.word2idx['<end>']
 
         self.lstm = nn.LSTM(self.embed_size, 
                             self.hidden_size, 
@@ -27,7 +30,7 @@ class LSTMDecoder(nn.Module):
         
         #self.lstm = nn.GRU(self.embed_size, self.hidden_size, self.num_layers, batch_first=True)
         self.linear = nn.Linear(self.hidden_size*self.direction_weight, self.vocab_size)
-        self.start_token = 119
+
 
     def init_hidden(self,batch_size = None):
         if batch_size is None:
@@ -84,21 +87,28 @@ class LSTMDecoder(nn.Module):
         return outputs
         '''
 
-    def predict(self, inputs,starting_token, max_len=50):   
+    def predict(self, inputs, max_len=50):   
         inputs = inputs.unsqueeze(1)     
         batch_size = inputs.shape[0]  
         final_output = torch.zeros(batch_size, max_len, dtype=torch.long)       
         hidden = self.init_hidden(batch_size) 
-        outputs_tensor = torch.zeros((batch_size, 90, self.vocab_size)).to(self.device)
-        for idx in range(max_len):
+        # print(f"self start tok {self.start_token}")
+        final_output[:,0] = self.start_token
+        # print(final_output[0])
+        outputs_tensor = torch.zeros((batch_size, max_len, self.vocab_size)).to(self.device)
+        outputs_tensor[:,0,self.start_token] = 1
+        for idx in range(max_len-1):
             lstm_out, hidden = self.lstm(inputs, hidden) 
             #outputs = self.linear(self.dropout(lstm_out))
             outputs = self.linear(lstm_out)
-            print(f"outputs after linear is {outputs.shape}")
+            # print(f"outputs after linear is {outputs.shape}")
             outputs = outputs.squeeze(1) 
+            outputs_tensor[:,idx+1,:] = outputs
+            
+ 
             _, max_idx = torch.max(outputs, dim=1) 
-            print(f"idx = {idx} out ten {outputs_tensor.shape} and {outputs.shape}")
-            outputs_tensor[:, idx, :] = outputs
+            #print(f"idx = {idx} out ten {outputs_tensor.shape} and {outputs.shape}")
+            outputs_tensor[:, idx+1, :] = outputs
             # final_output.append(max_idx.cpu().numpy()[0].item())   
             #print(f"Final output have shape {final_output.shape} with max_isx {max_idx.shape}") 
             # torch.cat((final_output,max_idx.cpu()),dim = 1)         
@@ -111,3 +121,24 @@ class LSTMDecoder(nn.Module):
         return final_output,outputs_tensor 
 
 
+if __name__ == "__main__":
+    from Vocabulary import Vocabulary
+    import pickle
+    with open("new_vocab_bladderreport.pkl", 'rb') as file:
+        vocabs = pickle.load(file)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    decoder = LSTMDecoder(
+            vocabs = vocabs, 
+            embed_size = 512, 
+            hidden_size = 256,  
+            batch_size= 8, 
+            bi_direction = False,
+            device = device,
+            dropout = 0.5,
+            num_layers = 1
+        )
+    x = torch.rand(8,512) 
+    out,out_ten = decoder.predict(x)
+    print(out.shape)
+    print(out_ten.shape)
+    

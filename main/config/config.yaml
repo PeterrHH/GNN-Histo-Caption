@@ -4,21 +4,32 @@ graph_path: "../../../../../../srv/scratch/bic/peter/full-graph"
 encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
-vocab_path: "vocab_bladderreport.pkl"
-learning_rate: 0.0005
+vocab_path: "new_vocab_bladderreport.pkl"
+learning_rate: 0.001
 weight_decay: 0.005
 phase: train # train, test, eval
 epochs: 100
 decoder_type: "LSTM" # Transformer, LSTM
-encoder: "CNN-GraphSage"
+train_mode: "train_mode"
+encoder: "CNN"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 optimizer_type: "Adam" # Adam, SGD
-batch_size: 8
-save_model: False
+batch_size: 64
+eval_batch_size: "full"
+model_save_base_path: "../../../../../../srv/scratch/bic/peter/model_save"
+save_model: True
+save_encoder: "Encoder6" # put encoder name
+save_decoder: "Decoder6" # put decoder name 
+save_global_feature_extractor: "GlobalExtractor6" # put feature extractor name
+save_classifier: "Classifier1" #  
 save_every: 2
 loss: label # Both, caption, label
-wandb_name: CNN/GS-LSTM bs 128 train max all cap in each epoch lr .00005 wd 0.005 SGD 2 layer lstm drop 0.2 emb 128, ATTENTION 4 H
-
+wandb_name: "BS64 lr 0.001 wd 0.005 Adam all 5 cap #6 LSTM ONLY CNN"
+load_encoder_name : "Encoder3-14-2.46.pt"
+load_global_extractor_name: "GlobalExtractor3-14-2.46.pt"
+load_decoder: "Decoder3-14-2.46.pt"
+load_train: False
+classifier_name: "lr lr=0.0001 #3 lowest"
 
 
 gnn_param:
@@ -39,7 +50,7 @@ gnn_param:
 global_class_param:
   hidden_size: 512
   output_size: 256
-  dropout_rate: 0.5
+  dropout_rate: 0.3
 
 classifier_param:
   num_class: 3
@@ -55,7 +66,7 @@ transformer_param:
 
 lstm_param:
   dropout: 0.3 # too much dropout in lstm breaks it
-  num_layers: 3
+  num_layers: 1
   size: 512
   bi_direction: False
 
