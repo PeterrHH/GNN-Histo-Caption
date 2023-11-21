@@ -194,8 +194,8 @@ def eval(eval_loader,
         with torch.no_grad():
             out = encoder(cg,tg,assign_mat,images)
             global_feat = global_feature_extractor(images)
-            #merged_feat = torch.cat((out, global_feat), dim=1)
-            merged_feat = global_feat
+            merged_feat = torch.cat((out, global_feat), dim=1)
+            #merged_feat = out
             lstm_out, lstm_out_tensor = decoder.predict(merged_feat,90)
             pred_matrix = classifier(merged_feat)
             pred_matrix = pred_matrix.to(device)
@@ -383,7 +383,7 @@ def model_def(args,device,vocabs,decoder_type = "transformer"):
     elif decoder_type == "LSTM":
         decoder = LSTMDecoder(
             vocabs = vocabs, 
-            # embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
+            #embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
             embed_size = args["global_class_param"]["output_size"], 
             hidden_size = args["lstm_param"]["size"],  
             batch_size= args["batch_size"], 
@@ -409,7 +409,7 @@ def model_def(args,device,vocabs,decoder_type = "transformer"):
         dropout_rate = args["global_class_param"]["dropout_rate"]).to(device)
 
     classifier = Classifier(
-        graph_output_size = 0,
+        graph_output_size = args['gnn_param']['output_size'],
         global_output_size = args["global_class_param"]["output_size"],
         hidden_size = args["classifier_param"]["hidden_size"],
         num_class = args["classifier_param"]["num_class"],
@@ -555,8 +555,8 @@ def main():
                 global_feat = global_feature_extractor(images)
 
 
-                # merged_feat = torch.cat((out, global_feat), dim=1)
-                merged_feat = global_feat
+                merged_feat = torch.cat((out, global_feat), dim=1)
+                #merged_feat = out
                 '''
                 merged_feat = global_feat.unsqueeze(1)
                 '''

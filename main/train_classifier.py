@@ -321,6 +321,7 @@ def train_classifier():
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
 
     classifier_optimizer = torch.optim.Adam(params = list_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
+    #classifier_optimizer = torch.optim.Adam(params = list_param, lr = args["learning_rate"])
     print(f"ready to init !!!!!")
     wandb.login(key = "ce5676f856caf561584c75f8175f6967876f1c77")
     wandb.init(

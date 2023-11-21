@@ -5,31 +5,31 @@ encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
 vocab_path: "new_vocab_bladderreport.pkl"
-learning_rate: 0.001
-weight_decay: 0.005
+learning_rate: 0.0001
+weight_decay: 0.0001
 phase: train # train, test, eval
-epochs: 100
-decoder_type: "LSTM" # Transformer, LSTM
+epochs: 200
+decoder_type: "Transformer" # Transformer, LSTM
 train_mode: "train_mode"
-encoder: "CNN"
+encoder: "GraphModel"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 optimizer_type: "Adam" # Adam, SGD
 batch_size: 64
 eval_batch_size: "full"
 model_save_base_path: "../../../../../../srv/scratch/bic/peter/model_save"
-save_model: True
-save_encoder: "Encoder6" # put encoder name
-save_decoder: "Decoder6" # put decoder name 
-save_global_feature_extractor: "GlobalExtractor6" # put feature extractor name
+save_model: False
+save_encoder: "Encoder10" # put encoder name
+save_decoder: "Decoder10" # put decoder name 
+save_global_feature_extractor: "GlobalExtractor10" # put feature extractor name
 save_classifier: "Classifier1" #  
 save_every: 2
 loss: label # Both, caption, label
-wandb_name: "BS64 lr 0.001 wd 0.005 Adam all 5 cap #6 LSTM ONLY CNN"
-load_encoder_name : "Encoder3-14-2.46.pt"
-load_global_extractor_name: "GlobalExtractor3-14-2.46.pt"
-load_decoder: "Decoder3-14-2.46.pt"
+wandb_name: "BS64 lr 0.0001 wd 0.0001 Adam all 1 cap #10 Transformer"
+load_encoder_name : "Encoder1-73-2.58.pt"
+load_global_extractor_name: "GlobalExtractor1-73-2.58.pt"
+load_decoder: "Decoder1-73-2.58.pt"
 load_train: False
-classifier_name: "lr lr=0.0001 #3 lowest"
+classifier_name: "lr lr=0.0001 #1 low"
 
 
 gnn_param:
@@ -54,14 +54,14 @@ global_class_param:
 
 classifier_param:
   num_class: 3
-  hidden_size: 64
+  hidden_size: 128
   dropout_rate: 0.5
 
 transformer_param:
   n_head : 4
   num_layers: 3
   dim_feedforward: 2048
-  dropout: 0.2
+  dropout: 0.1
 
 
 lstm_param:

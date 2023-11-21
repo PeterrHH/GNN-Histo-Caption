@@ -33,6 +33,7 @@ class TransformerDecoder(nn.Module):
             nn.TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout),
             num_layers
         )
+        # self.transformer_decoder = nn.Transformer()
         self.fc_out = nn.Linear(d_model, self.vocab_size)
         self.start_token = self.vocabs.word2idx['<start>'] # Default
         self.end_token = self.vocabs.word2idx['<end>']
@@ -44,14 +45,27 @@ class TransformerDecoder(nn.Module):
     tgt: tgt_size: (batch_size, max_len)
     '''
     def forward(self, memory, tgt):
-        seq_len = tgt.shape[1]
+        #print(f"in input tgt shape {tgt.shape}")
+        print(f"tgt {tgt.shape} mem {memory.shape}")
+        tgt = tgt.permute(1,0)
+        memory = memory.permute(1,0)
+
+        seq_len = tgt.shape[0]
+        mem_len = memory.shape[0]
+        memory = memory.unsqueeze(0).permute(0,2,1)
 
         tgt_mask = nn.Transformer().generate_square_subsequent_mask(seq_len).to(self.device)
+        # tgt = tgt.permute(1,0)
         tgt = self.embedding(tgt) * math.sqrt(self.d_model)
         tgt = self.pos_encoder(tgt)
-        memory = memory.unsqueeze(0)
-        tgt = tgt.permute(1,0,2)
 
+        # memory = self.embedding(memory)*math.sqrt(self.d_model)
+        # memory = self.pos_encoder(memory)
+
+
+        # memory = memory.unsqueeze(0)
+        # tgt = tgt.permute(1,0,2)
+        print(f"tgt {tgt.shape} mem {memory.shape} mask {tgt_mask.shape}")
         output = self.transformer_decoder(tgt, memory, tgt_mask = tgt_mask)
 
 
@@ -75,38 +89,46 @@ class TransformerDecoder(nn.Module):
 
             with torch.no_grad():
                 output = self.forward(memory, generated_words)
-                print(output.shape)
+                #print(output.shape)
             outputs_tensor[:,i+1,:] = output[-1,:,:]
 
             next_word = torch.argmax(output[-1,:,:],dim = 1).unsqueeze(1)
 
 
             generated_words = torch.cat((generated_words, next_word), dim=1)
-            print(f"gen words {generated_words}")
+            # print(f"gen words {generated_words}")
 
             if (next_word == self.end_token).all():
                 break
-
+           # print('--------------')
         return generated_words,outputs_tensor
 
 
 if __name__ == "__main__":
     from Vocabulary import Vocabulary
     import pickle
+
+
     with open("new_vocab_bladderreport.pkl", 'rb') as file:
         vocabs = pickle.load(file)
     decoder = TransformerDecoder( vocabs = vocabs, d_model = 512,        
         nhead = 2, 
         num_layers = 3, 
+
         dim_feedforward=2048, 
         dropout=0.2)
-    x = torch.rand(2,512) 
-    cap_tok = torch.rand(2,90) 
+    x = torch.rand(32,512) 
+    cap_tok = torch.rand(32,90).long()
+    # x = torch.rand(512,2)
+    # cap_tok = torch.rand(90,2)
     # decoder(x,cap_tok.long())
-    out,out_ten = decoder.predict(x,5)
-    # print(out.shape)
+    out = decoder(x,cap_tok)
+    # out,out_ten = decoder.predict(x,5)
+    print(out.shape)
+    # print(out_ten.shape)
 
-    print(out)
-    print(out_ten.shape)
+    # print(out)
+    ''' 
     # print(out[0])
     # print(out[1])
+    '''

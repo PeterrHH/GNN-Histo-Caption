@@ -22,7 +22,7 @@ class Classifier(nn.Module):
             nn.Linear(hidden_size, 64),  # Hidden layer
             nn.ReLU(),
             nn.Dropout(dropout_rate),           
-            nn.Linear(hidden_size,num_class)  
+            nn.Linear(64,num_class)  
             # nn.Linear(self.input_size, num_class),
             # nn.Dropout(dropout_rate)
         )
