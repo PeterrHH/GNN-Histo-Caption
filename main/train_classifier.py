@@ -120,18 +120,6 @@ def get_all_models(args,device):
 
     encoder_path = os.path.join(args["model_save_base_path"],args["load_encoder_name"])
     global_feat_path = os.path.join(args["model_save_base_path"],args["load_global_extractor_name"])
-    # print(f"current dir {current_directory}")
-    # print(f"encoder path {encoder_path} and {os.path.exists(encoder_path)}")
-    # print(f"global feat path {global_feat_path} and {os.path.exists(global_feat_path)} ")
-    # files = os.listdir(args["model_save_base_path"])
-    # if args["load_encoder_name"] in files:
-    #     print(f"{args['load_encoder_name']} in directory")
-
-    # if args["load_global_extractor_name"] in files:
-    #     print(f"{args['load_global_extractor_name']} in directory")
-    # for i in files:
-    #     print(i)
-
 
     if os.path.exists(encoder_path):
         # load
