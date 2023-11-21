@@ -9,7 +9,7 @@ learning_rate: 0.0001
 weight_decay: 0.0001
 phase: train # train, test, eval
 epochs: 200
-decoder_type: "Transformer" # Transformer, LSTM
+decoder_type: "LSTM" # Transformer, LSTM
 train_mode: "train_mode"
 encoder: "GraphModel"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
@@ -18,13 +18,13 @@ batch_size: 64
 eval_batch_size: "full"
 model_save_base_path: "../../../../../../srv/scratch/bic/peter/model_save"
 save_model: False
-save_encoder: "Encoder10" # put encoder name
-save_decoder: "Decoder10" # put decoder name 
-save_global_feature_extractor: "GlobalExtractor10" # put feature extractor name
+save_encoder: "Encoder11" # put encoder name
+save_decoder: "Decoder11" # put decoder name 
+save_global_feature_extractor: "GlobalExtractor11" # put feature extractor name
 save_classifier: "Classifier1" #  
 save_every: 2
 loss: label # Both, caption, label
-wandb_name: "BS64 lr 0.0001 wd 0.0001 Adam all 1 cap #10 Transformer"
+wandb_name: "BS64 lr 0.0001 Adam all 1 cap #12 with GRU"
 load_encoder_name : "Encoder1-73-2.58.pt"
 load_global_extractor_name: "GlobalExtractor1-73-2.58.pt"
 load_decoder: "Decoder1-73-2.58.pt"
@@ -35,8 +35,8 @@ classifier_name: "lr lr=0.0001 #1 low"
 gnn_param:
   cell_layers: 3
   tissue_layers: 3
-  cell_conv_method: "GraphSage" # GCN, GAT, GraphSage, GIN, PNA
-  tissue_conv_method: "GraphSage" # GCN, GAT, GraphSage, GIN, PNA
+  cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
+  tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
   aggregate_method: "mean" # sum, mean, max
   hidden_size: 256

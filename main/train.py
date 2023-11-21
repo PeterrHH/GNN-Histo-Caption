@@ -383,8 +383,8 @@ def model_def(args,device,vocabs,decoder_type = "transformer"):
     elif decoder_type == "LSTM":
         decoder = LSTMDecoder(
             vocabs = vocabs, 
-            #embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
-            embed_size = args["global_class_param"]["output_size"], 
+            embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
+            # embed_size = args["global_class_param"]["output_size"], 
             hidden_size = args["lstm_param"]["size"],  
             batch_size= args["batch_size"], 
             bi_direction = args["lstm_param"]["bi_direction"],
@@ -490,9 +490,9 @@ def main():
     all_params = list(encoder.parameters()) + list(global_feature_extractor.parameters()) + list(decoder.parameters())
     print(f"----------TOTAL NUMBER OF PARAMETERS: {len(all_params)}-------------")
     if args["optimizer_type"] == "Adam":
-        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
+        #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
         #classifier_optimizer = torch.optim.Adam(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
-        #optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
     elif args["optimizer_type"] == "SGD":
         caption_optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"],weight_decay=args["weight_decay"])
         #classifier_optimizer = torch.optim.SGD(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])

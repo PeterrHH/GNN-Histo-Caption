@@ -79,7 +79,7 @@ class GNNEncoder(nn.Module):
                 self.cell_layer.append(
                     nn.Sequential(
                         self.get_gm(self.cell_conv_method,self.input_feat,self.hidden_feat),
-                        # GraphNorm(self.hidden_feat),
+                        GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
@@ -88,7 +88,7 @@ class GNNEncoder(nn.Module):
                     nn.Sequential(
                         #self.get_gm(self.cell_conv_method,self.hidden_feat,self.hidden_feat),
                         self.selected_cell_conv_method,
-                        # GraphNorm(self.hidden_feat),
+                        GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
