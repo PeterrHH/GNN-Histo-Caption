@@ -22,13 +22,13 @@ class LSTMDecoder(nn.Module):
         self.start_token = self.vocabs.word2idx['<start>'] # Default
         self.end_token = self.vocabs.word2idx['<end>']
 
-        self.lstm = nn.LSTM(self.embed_size, 
-                            self.hidden_size, 
-                            self.num_layers, 
-                            batch_first = True, 
-                            bidirectional = self.bi_direction) # tensor shape (batch, seq, feature)  when batch_first = True
+        # self.lstm = nn.LSTM(self.embed_size, 
+        #                     self.hidden_size, 
+        #                     self.num_layers, 
+        #                     batch_first = True, 
+        #                     bidirectional = self.bi_direction) # tensor shape (batch, seq, feature)  when batch_first = True
         
-        #self.lstm = nn.GRU(self.embed_size, self.hidden_size, self.num_layers, batch_first=True)
+        self.lstm = nn.GRU(self.embed_size, self.hidden_size, self.num_layers, batch_first=True, bidirectional=self.bi_direction)
         self.linear = nn.Linear(self.hidden_size*self.direction_weight, self.vocab_size)
 
 
@@ -58,7 +58,8 @@ class LSTMDecoder(nn.Module):
         #print(f"before cat, feature {features.shape} and embeds is {embeds.shape}")
         inputs = torch.cat( ( features, embeds ) , dim =1)
          
-        embeddings,_ = self.lstm(inputs,(h_0,c_0))
+        #embeddings,_ = self.lstm(inputs,(h_0,c_0))
+        embeddings,_ = self.lstm(inputs,h_0) # GRU only
         #print(f"after lstm embedding {embeddings.shape}")
         # caption shape (bs,90) -> embeds shape (bs,89,1028)
         # feature shape (bs,1,1028) 
@@ -91,7 +92,7 @@ class LSTMDecoder(nn.Module):
         inputs = inputs.unsqueeze(1)     
         batch_size = inputs.shape[0]  
         final_output = torch.zeros(batch_size, max_len, dtype=torch.long)       
-        hidden = self.init_hidden(batch_size) 
+        hidden,_ = self.init_hidden(batch_size)
         # print(f"self start tok {self.start_token}")
         final_output[:,0] = self.start_token
         # print(final_output[0])

@@ -6,6 +6,9 @@ import numpy as np
 from dgl.data.utils import load_graphs
 from torch.utils.data import Dataset
 from glob import glob 
+import nltk
+from nltk.corpus import wordnet
+nltk.download('wordnet')
 import dgl 
 import json
 import sys
@@ -90,7 +93,7 @@ class DiagnosticDataset(Dataset):
 
         self.get_captions_labels(self.img_path,self.split)
         self.img = self.get_img(self.img_path,self.split)
-
+        self.key_words = ['nucleoli', 'pleomorphism', 'nuclei','polarity','mitosis','nuclear','crowding']
 
     '''
     Get the captions and the labels
@@ -164,9 +167,17 @@ class DiagnosticDataset(Dataset):
                 h5_to_tensor(single_assign_path).float()
                     for single_assign_path in self.list_assign_path
             ]
+    def get_synonyms(self,word):
+        synonyms = set()
+        for syn in wordnet.synsets(word):
+            for lemma in syn.lemmas():
+                synonyms.add(lemma.name())
+        if word in synonyms:
+            synonyms.remove(word)
+        return list(synonyms)
+
     def get_cap_and_token(self, caption):
  #   Process cations and labels
-
 
         sentences = caption.rstrip('.').replace(',','').split('. ')
         caption_tokens = [] # convert to tokens for all num_feature sentences
@@ -174,17 +185,13 @@ class DiagnosticDataset(Dataset):
         '''
         If we want not the have the final sentence use sentences[:-1]
         '''
-        for s, sentence in enumerate(sentences):
-            #   if feature (except conclusion) is insufficient information, do not output it
-            #   but the conclusion (last one) is insufficient information, we still output it
-            # if 'ins' in sentence:
-            #     print(f"{sentence} - s is {s}")
+        for s, sentence in enumerate(sentences[:-1]):
             if 'insufficient information' in sentence and s < (len(sentences)-1): 
                 # print(f"    get here!!! {sentence[s]}")
                 clean_sentences[s] = ''
                 continue
             tokens = nltk.tokenize.word_tokenize(str(sentence).lower())
-            toekns = [word for word in tokens if '.' not in word]
+            #toekns = [word for word in tokens if '.' not in word]
             clean_sentences[s] = sentence + ' <end>'
 
             tokens.append('<end>')  # add stop indictor
@@ -201,6 +208,8 @@ class DiagnosticDataset(Dataset):
         # caption = [string.strip() for string in caption if string.strip()]
         # print(f"clean sentences:")
         # print(caption)
+        if caption.isspace():
+            clean_sentences = "<end>"
         return caption_tokens, caption,current_masks
 
     '''
@@ -330,6 +339,7 @@ class DiagnosticDataset(Dataset):
         ''' 
         return len(self.cg)
         '''
+
 
 
 

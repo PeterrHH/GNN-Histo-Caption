@@ -4,27 +4,27 @@ graph_path: "../../../../../../srv/scratch/bic/peter/full-graph"
 encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
-vocab_path: "new_vocab_bladderreport.pkl"
-learning_rate: 0.0001
-weight_decay: 0.0001
+vocab_path: "new_vocab_bladderreport.pkl" # process_vocab_bladderreport.pkl
+learning_rate: 0.01
+weight_decay: 0.005
 phase: train # train, test, eval
-epochs: 200
+epochs: 100
 decoder_type: "LSTM" # Transformer, LSTM
 train_mode: "train_mode"
-encoder: "GraphModel"
+encoder: "GCN"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
 optimizer_type: "Adam" # Adam, SGD
-batch_size: 64
+batch_size: 32
 eval_batch_size: "full"
 model_save_base_path: "../../../../../../srv/scratch/bic/peter/model_save"
-save_model: False
-save_encoder: "Encoder11" # put encoder name
-save_decoder: "Decoder11" # put decoder name 
-save_global_feature_extractor: "GlobalExtractor11" # put feature extractor name
+save_model: True
+save_encoder: "Encoder35" # put encoder name
+save_decoder: "Decoder35" # put decoder name 
+save_global_feature_extractor: "GlobalExtractor35" # put feature extractor name
 save_classifier: "Classifier1" #  
 save_every: 2
-loss: label # Both, caption, label
-wandb_name: "BS64 lr 0.0001 Adam all 1 cap #12 with GRU"
+loss: label # Both, caption, label 
+wandb_name: "BS32 lr 0.0001 Adam all 5 cap #35 with LSTM weighted sample NEW VOCAB NORMAL LOAD DROPOUT! EARLY STOPPING GCN"
 load_encoder_name : "Encoder1-73-2.58.pt"
 load_global_extractor_name: "GlobalExtractor1-73-2.58.pt"
 load_decoder: "Decoder1-73-2.58.pt"
@@ -33,8 +33,8 @@ classifier_name: "lr lr=0.0001 #1 low"
 
 
 gnn_param:
-  cell_layers: 3
-  tissue_layers: 3
+  cell_layers: 2
+  tissue_layers: 1
   cell_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   tissue_conv_method: "GCN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
@@ -48,9 +48,9 @@ gnn_param:
   GIN:
 
 global_class_param:
-  hidden_size: 512
+  hidden_size: 256
   output_size: 256
-  dropout_rate: 0.3
+  dropout_rate: 0.5
 
 classifier_param:
   num_class: 3
@@ -65,7 +65,7 @@ transformer_param:
 
 
 lstm_param:
-  dropout: 0.3 # too much dropout in lstm breaks it
+  dropout: 0.4 # too much dropout in lstm breaks it
   num_layers: 1
   size: 512
   bi_direction: False

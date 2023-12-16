@@ -97,8 +97,9 @@ class GNNEncoder(nn.Module):
                 self.tissue_layer.append(
                     nn.Sequential(
                         self.get_gm(self.tissue_conv_method,self.hidden_feat+self.input_feat,self.hidden_feat),
-                        #GraphNorm(self.hidden_feat),
+                        GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
+                        
                     )
                 )
             else:
@@ -106,10 +107,11 @@ class GNNEncoder(nn.Module):
                     nn.Sequential(
                         #self.get_gm(self.tissue_conv_method,self.hidden_feat,self.hidden_feat),
                         self.selected_tissue_conv_method,
-                        #GraphNorm(self.hidden_feat),
+                        GraphNorm(self.hidden_feat),
                         BatchNorm(self.hidden_feat)
                     )
                 )
+        self.dropout = nn.Dropout(p=0.3)
 
         self.lin_out = nn.Linear(self.hidden_feat,self.output_size)
         self.img_downsample = nn.Linear(1000,self.output_size)
@@ -130,6 +132,8 @@ class GNNEncoder(nn.Module):
             return GATConv(in_feat, out_feat, num_heads = self.args["gnn_param"]["GAT"]["num_heads"])
         elif conv_method == "GraphSage":
             return SAGEConv(in_feat, out_feat, aggregator_type= self.args["gnn_param"]["GraphSage"]["aggregator_type"])
+        elif conv_method == "GIN":
+            return GINConv(in_feat, out_feat)
         else:
             return None
     def compute_assigned_feats(self, cg_feat,cell_graph,assignment_mat,tg_feat):
@@ -197,11 +201,14 @@ class GNNEncoder(nn.Module):
         cell_edge = torch.stack(cell_graph.edges())
         tissue_edge = torch.stack(tissue_graph.edges())
         tissue_feat = tissue_graph.ndata['feat']
-
+        # print(cell_graph)
+        # print(tissue_graph)
+        # print(assignment_mat.shape)
         for layer in self.cell_layer:
             cell_feat = layer[0](cell_graph, cell_feat)
             #print(f"Convolution {cell_feat.shape}")
             cell_feat = layer[1](cell_feat)
+            cell_feat = self.dropout(cell_feat)
             #print(f"Graph Norm {cell_feat.shape}")
             # cell_feat = layer[2](cell_feat)
             #print(f"Batch Norm {cell_feat.shape}")
@@ -232,6 +239,7 @@ class GNNEncoder(nn.Module):
         for layer in self.tissue_layer:
             x = layer[0](tissue_graph,x)
             x = layer[1](x)
+            tissue_feat = self.dropout(tissue_feat)
             # x = layer[2](x)
         x = self.lin_out(x)
 

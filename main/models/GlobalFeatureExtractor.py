@@ -25,6 +25,6 @@ class GlobalFeatureExtractor(nn.Module):
     def forward(self,image):
         img_feat = self.feature_extractor(image)
         img_feat = self.img_downsample(img_feat)
-        img_feat = self.dropout(F.relu(img_feat))
+        img_feat = self.dropout(img_feat)
         # img_feat = F.sigmoid(img_feat)
         return img_feat

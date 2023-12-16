@@ -19,7 +19,7 @@ sys.path.append('../histocartography/histocartography')
 sys.path.append('../histocartography')
 
 from evaluation import Scorer
-from dataloader import make_dataloader
+from dataloader import make_dataloader,dataset_to_loader
 
 import wandb
 
@@ -32,6 +32,7 @@ from models.GlobalFeatureExtractor import GlobalFeatureExtractor
 from models.Classifier import Classifier
 from models.Transformer import TransformerDecoder
 from data_plotting import violin_plot
+from torch.utils.data import WeightedRandomSampler
 
 
 import sys
@@ -119,7 +120,7 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
 
     for i,caption in enumerate(captions):
         for sent_i,sent_cap in enumerate(caption):
-            captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","")
+            captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","").replace('<unk>',"")
             
     j = 0
     for idx,embed in enumerate(decode_output):
@@ -345,6 +346,34 @@ def unpack_score(scores):
    # spice = scores["SPICE"]
 
     return bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider
+def get_sample_samplier(dataset,batch_size):
+    class_count = {
+        '0': 0,
+        '1': 0,
+        '2': 0,
+        }
+
+    count = 0
+    class_weight = []
+    for idx,output in enumerate(dataset):
+        _, _, _, _, labels, _, _= output
+        class_count[str(labels)] += 1
+        count += 1
+
+    print(class_count)
+    for key,value in class_count.items():
+        class_weight.append(1/value)
+    print(class_weight)
+    sample_weights = [0]*len(dataset)
+
+    for idx, output in enumerate(dataset):
+        _, _, _, _, labels, _, _= output
+        # print(labels.shape)
+        class_count[str(labels)] += 1
+        sample_weights[idx] = class_weight[labels]
+    sampler = WeightedRandomSampler(weights = sample_weights,num_samples = len(dataset),replacement = True)
+    dl = dataset_to_loader(dataset, sampler = sampler, batch_size = batch_size)
+    return dl
 
 '''
 decoder transformer/LSTM
@@ -438,18 +467,18 @@ def main():
         torch.cuda.manual_seed_all(seed)
     #   make the dl here
     #   !!!!!!!!!!! Change it back to train
-    train_eval_dl,_ = make_dataloader(
-        batch_size = args["batch_size"],
-        split = "train",
-        base_data_path = args["dataset_path"],
-        graph_path = args["graph_path"],
-        vocab_path = args["vocab_path"],
-        shuffle=True,
-        num_workers=0,
-        load_in_ram = True,
-        mode = "eval"
-    )
-    train_dl,_ = make_dataloader(
+    # train_eval_dl,_ = make_dataloader(
+    #     batch_size = args["batch_size"],
+    #     split = "train",
+    #     base_data_path = args["dataset_path"],
+    #     graph_path = args["graph_path"],
+    #     vocab_path = args["vocab_path"],
+    #     shuffle=True,
+    #     num_workers=0,
+    #     load_in_ram = True,
+    #     mode = "eval"
+    # )
+    train_dl,train_dataset = make_dataloader(
         batch_size = args["batch_size"],
         split = "train",
         base_data_path = args["dataset_path"],
@@ -459,6 +488,7 @@ def main():
         num_workers=0,
         load_in_ram = True
     )
+    # train_dl = get_sample_samplier(train_dataset,args["batch_size"])
     print(f"train loader size {len(train_dl)}")
 
     test_dl,_ = make_dataloader(
@@ -490,9 +520,9 @@ def main():
     all_params = list(encoder.parameters()) + list(global_feature_extractor.parameters()) + list(decoder.parameters())
     print(f"----------TOTAL NUMBER OF PARAMETERS: {len(all_params)}-------------")
     if args["optimizer_type"] == "Adam":
-        #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
+        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
         #classifier_optimizer = torch.optim.Adam(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
-        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+
     elif args["optimizer_type"] == "SGD":
         caption_optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"],weight_decay=args["weight_decay"])
         #classifier_optimizer = torch.optim.SGD(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
@@ -527,6 +557,8 @@ def main():
         batch_size = args["batch_size"]
         total_step = math.ceil(total_samples / batch_size)
         best_eval_loss = 10
+        patience = 8
+        counter = 0
         best_encoder = None
         best_decoder = None
         best_feature_extractor = None
@@ -581,7 +613,7 @@ def main():
                 #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
                 caption_loss.backward(retain_graph=True)
                 #label_loss.backward()
-                nn.utils.clip_grad_norm_(all_params, 2.0)
+                nn.utils.clip_grad_norm_(all_params, 1.0)
                 caption_optimizer.step()
 
                 #classifier_optimizer.step()
@@ -604,12 +636,7 @@ def main():
             current_encoder = encoder
             current_feature_extractor = global_feature_extractor
             current_decoder = decoder
-            if eval_loss.item() < best_eval_loss:
-                best_eval_loss = eval_loss.item()
-                best_epoch = epoch
-                best_encoder = encoder
-                best_decoder = decoder
-                best_feature_extractor = global_feature_extractor
+
 
             eval_output = {
                 'train_cap_loss':mean_loss,
@@ -624,16 +651,31 @@ def main():
                 'f1_score':f1_score,
             }
             wandb.log(eval_output)
+            if eval_loss.item() < best_eval_loss:
+                best_eval_loss = eval_loss.item()
+                best_epoch = epoch
+                best_encoder = encoder
+                best_decoder = decoder
+                counter = 0
+                best_feature_extractor = global_feature_extractor
+            else:
+                counter += 1
+                if counter >= patience and epoch > 20:
+                    save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
+                    torch.cuda.empty_cache()
+                    break
+                # save_model_to_path(args,current_encoder,current_decoder,current_feature_extractor,current_loss,args["epochs"]-1)
+
 
             
 
             torch.cuda.empty_cache()
         print(f"!!!At epoch [{str(epoch+1)}/{args['epochs']}] evaluate results is {eval_output}")
         
-        if args["save_model"]:
-            print(f"eval list item is {best_eval_loss}")
-            save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
-            save_model_to_path(args,current_encoder,current_decoder,current_feature_extractor,current_loss,args["epochs"]-1)
+        # if args["save_model"]:
+        #     print(f"eval list item is {best_eval_loss}")
+        #     save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
+        #     save_model_to_path(args,current_encoder,current_decoder,current_feature_extractor,current_loss,args["epochs"]-1)
         # train_scores, train_loss, train_accuracy, train_f1_score = eval(train_eval_dl,
         #                                             encoder,
         #                                             attention,
@@ -643,9 +685,9 @@ def main():
         #                                             DEVICE,criterion,vocab_size,labels)
         # print(f"train loss is {train_loss} for epoch {epoch}")
 
-        if args["save_model"]:
-            print(f"eval list item is {best_eval_loss}")
-            save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
+        # if args["save_model"]:
+        #     print(f"eval list item is {best_eval_loss}")
+        #     save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
         
         scores,_,accuracy,f1_score = eval(test_dl,encoder,attention,decoder, 
                                             global_feature_extractor,classifier,DEVICE,criterion,vocab_size,labels,eval = False)
@@ -694,12 +736,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-'''
-
-- Train the captioning, feature extraction and caption generation first. Saved the Encoder, Global Feat Extarction and Decoder
-- Then Train the Classifier 
-
-'''

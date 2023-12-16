@@ -134,7 +134,7 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
     for i,caption in enumerate(captions):
         for sent_i,sent_cap in enumerate(caption):
         #    print(captions[i][sent_i])
-           captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","")
+           captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","").replace('<unk',"")
         #captions[i] = ' '.join(caption.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","")
 
     j = 0
@@ -147,6 +147,10 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
             #   Empty
             pred_dict["1"] = [sentence]
             cap_dict["1"] = captions[idx]
+            print(f"-------Prediction------")
+            print(pred_dict)
+            print(f"---------cap dict-------")
+            print(cap_dict)
             pass
         else:
             pred_dict[str(len(pred_dict)+1)] = [sentence]
@@ -157,8 +161,25 @@ def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
     # print(cap_dict)
     return pred_dict,cap_dict
 
+def save_model_to_path(args, encoder, decoder, global_feature_extractor,encoder_name,decoder_name,glob_name):
+    base_save_path = "../../../../../../srv/scratch/bic/peter/k_fold_model_save"
+    if not os.path.exists(base_save_path):
+        os.mkdir(base_save_path)
+    if encoder:
+        encoder_store_path = os.path.join(base_save_path, encoder_name)
+        torch.save(encoder, encoder_store_path)
+        print(f"Encoder {encoder_name} SAVED")
+    if global_feature_extractor:
+        global_extractor_path = os.path.join(base_save_path,glob_name)
+        torch.save(global_feature_extractor,global_extractor_path)
+        print(f"Global Extractor {glob_name} SAVED")
 
-def eval(eval_loader,encoder,attention,global_feature_extractor, decoder,device, batch_size,criterion, vocab_size, eval = True) :
+    if decoder:
+        decoder_store_path = os.path.join(base_save_path, decoder_name)
+        torch.save(decoder, decoder_store_path)
+        print(f"Decoder {decoder_name} SAVED")
+
+def eval(eval_loader,encoder,global_feature_extractor, decoder,device, batch_size,criterion, vocab_size, eval = True) :
     total_samples = len(eval_loader.dataset)
     total_step = math.ceil(total_samples / batch_size)
     pred_dict = {}
@@ -171,7 +192,7 @@ def eval(eval_loader,encoder,attention,global_feature_extractor, decoder,device,
         "METEOR":[],
         "ROUGE_L":[],
         "CIDEr":[],
-        "SPICE":[]
+        # "SPICE":[]
     }
     #print(f"total sample is {total_samples} total step is {total_step} batch_size is {batch_size}")
     #print(f"TOTAL STEP is {total_step}")
@@ -185,7 +206,8 @@ def eval(eval_loader,encoder,attention,global_feature_extractor, decoder,device,
  
         # print(f"caption_tokens shape {caption_tokens.shape}")
         # print(f"caption len{len(captions)} within {len(captions[0])}")
-        encoder , decoder, attention = encoder.to(device) , decoder.to(device), attention.to(device)
+        encoder , decoder= encoder.to(device) , decoder.to(device)
+        global_feature_extractor = global_feature_extractor.to(device)
         caption_tokens = caption_tokens.to(device)
         # encoder.eval()
         # decoder.eval()
@@ -255,53 +277,6 @@ def eval(eval_loader,encoder,attention,global_feature_extractor, decoder,device,
         # print(test_output)
     return test_output,eval_loss
 
-def save_model_to_path(epoch, encoder, encoder_path,decoder, decoder_path, encoder_name,decoder_name):
-    if not os.path.exists(encoder_path):
-        os.mkdir(encoder_path)
-    if not os.path.exists(decoder_path):
-        os.mkdir(decoder_path) 
-
-    encoder_store_path = os.path.join(encoder_path, encoder_name)
-    decoder_store_path = os.path.join(decoder_path, decoder_name)
-
-    torch.save(encoder, encoder_store_path)
-    torch.save(decoder, decoder_store_path)
-    pass
-def load_model(encoder_path, decoder_path,vocab_size,args,device):
-    encoder = GNNEncoder(
-        args = args,
-        pool_method = None, 
-        cg_layer = args['gnn_param']['cell_layers'], 
-        tg_layer = args['gnn_param']['tissue_layers'],
-        aggregate_method = "sum", 
-        input_feat = 512,
-        output_size = 512
-    )
-    decoder = LSTMDecoder(
-        vocab_size = vocab_size, 
-        embed_size = 512, 
-        hidden_size = 512,  
-        batch_size= args["batch_size"], 
-        bi_direction = args["lstm_param"]["bi_direction"],
-        device = device,
-        dropout = args["lstm_param"]["dropout"],
-        num_layers = args["lstm_param"]["num_layers"]
-    )
-    if os.path.exist(encoder_path):
-        # load
-        encoder.load(torch.load(encoder_path))
-        pass
-    else:
-        raise Exception(f"Encoder path {encoder_path} not exist")
-    
-    
-    if os.path.exist(decoder_path):
-        # load
-        decoder.load(torch.load(decoder_path))
-    else:
-        raise Exception(f"Encoder path {decoder_path} not exist")
-    
-    return encoder, decoder
 
 def unpack_score(scores):
     bleu1 = scores["Bleu1"]
@@ -315,7 +290,10 @@ def unpack_score(scores):
 
     return bleu1, bleu2, bleu3, bleu4, meteor, rouge, cider
 
-def model_def(args,device,vocab_size,decoder_type = "transformer"):
+def model_def(args,device,vocabs,decoder_type = "transformer"):
+    '''
+    decoder: transformer/lstm
+    '''
     '''
     decoder: transformer/lstm
     '''
@@ -330,25 +308,27 @@ def model_def(args,device,vocab_size,decoder_type = "transformer"):
         output_size = args['gnn_param']['output_size'],
     ).to(device)
 
-    attention = EncoderLayer(d_model = args['gnn_param']['output_size'], 
-        nhead = 4, 
-        dim_feedforward = 1024, 
-        dropout = 0.2).to(device)
-
+    # attention = EncoderLayer(d_model = args['gnn_param']['output_size'], 
+    #     nhead = 4, 
+    #     dim_feedforward = 1024, 
+    #     dropout = 0.2).to(device)
+    attention = None
     
     if decoder_type == "Transformer":
         decoder =  TransformerDecoder(
-            vocab_size = vocab_size,
+            vocabs = vocabs,
             d_model =  args['gnn_param']['output_size']+args["global_class_param"]["output_size"],
             nhead = args['transformer_param']['n_head'], 
             num_layers = args['transformer_param']['num_layers'], 
             dim_feedforward=args['transformer_param']['dim_feedforward'], 
             dropout= args['transformer_param']['dropout'],
+            device = device,
         ).to(device)
     elif decoder_type == "LSTM":
         decoder = LSTMDecoder(
-            vocab_size = vocab_size, 
+            vocabs = vocabs, 
             embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
+            # embed_size = args["global_class_param"]["output_size"], 
             hidden_size = args["lstm_param"]["size"],  
             batch_size= args["batch_size"], 
             bi_direction = args["lstm_param"]["bi_direction"],
@@ -378,6 +358,7 @@ def model_def(args,device,vocab_size,decoder_type = "transformer"):
         hidden_size = args["classifier_param"]["hidden_size"],
         num_class = args["classifier_param"]["num_class"],
         dropout_rate = args["classifier_param"]["dropout_rate"]).to(device)
+
     return encoder, attention, decoder, global_feature_extractor, classifier 
 
 def train_epoch(loader,batch_size,device,encoder,decoder,attention,global_feature_extractor,criterion,all_params,optimizer,vocab_size):
@@ -429,7 +410,9 @@ def main():
     print("Parse")
     args = update_argparser(args)
     print(args)
-
+    with open(args["vocab_path"], 'rb') as file:
+        vocabs = pickle.load(file)
+    vocab_size = len(vocabs)
     seed = 42
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -473,14 +456,6 @@ def main():
     '''
     dataset = train_dataset
     #   Define Model, Loss and 
-    vocab_size = len(train_dl.dataset.vocab)
-
-
- 
-
-
-
-
 
 
     # model = GNN_LSTM(encoder, decoder,hidden_dim, vocab_size,gnn_param, lstm_param, phase)
@@ -518,7 +493,7 @@ def main():
             train_loader = dataset_to_loader(dataset, batch_size=batch_size, sampler=train_sampler)
             test_loader = dataset_to_loader(dataset, batch_size=total_samples, sampler=test_sampler)
 
-            encoder, attention, decoder, global_feature_extractor, classifier = model_def(args, DEVICE, vocab_size,decoder_type="LSTM")
+            encoder, attention, decoder, global_feature_extractor, classifier = model_def(args, DEVICE, vocabs,decoder_type="LSTM")
             criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
             all_params = list(decoder.parameters())  + list( encoder.parameters() ) + list(global_feature_extractor.parameters())
 
@@ -528,16 +503,18 @@ def main():
             elif args["optimizer_type"] == "SGD":
                 optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"],weight_decay=args["weight_decay"])
             torch.autograd.set_detect_anomaly(True)
+            nn.utils.clip_grad_norm_(all_params, 1.0)
 
-            encoder , decoder, attention = encoder.to(DEVICE) , decoder.to(DEVICE), attention.to(DEVICE)
+            encoder , decoder = encoder.to(DEVICE) , decoder.to(DEVICE)
+            global_feature_extractor = global_feature_extractor.to(DEVICE)
             for epoch in range(args["epochs"]):
                 encoder,decoder,attention,total_loss = train_epoch(train_loader,args["batch_size"],DEVICE,encoder,decoder,attention,global_feature_extractor,criterion,all_params,optimizer,vocab_size)
                 mean_loss = np.mean(total_loss)
                 print(f"Epoch {str(epoch+1)}: train loss is {mean_loss}")
                 
                 del total_loss
-   
-            scores,eval_loss = eval(eval_dl,encoder,attention,global_feature_extractor,decoder,DEVICE,889,criterion,vocab_size)
+
+                scores,eval_loss = eval(eval_dl,encoder,global_feature_extractor,decoder,DEVICE,889,criterion,vocab_size)
 
             eval_output = {
                 'train_loss':mean_loss,
@@ -553,15 +530,15 @@ def main():
             }
             wandb.log(eval_output)
             print(f"!!!At epoch [{str(epoch+1)}/{args['epochs']}] evaluate results is {eval_output}")
-            if args["save_model"]:
-                if (epoch+1) % args["save_every"] == 0:
-                    encoder_name = f"Gsage_encoder_epoch{str(epoch+1)}.pt"
-                    decoder_name = f"Gsage_LSTM_decoder_epoch{str(epoch+1)}.pt"
-                    save_model_to_path(epoch, encoder, args["encoder_path"],decoder, args["decoder_path"], encoder_name,decoder_name)
+            encoder_name = f"Encoder{fold}.pt"
+            decoder_name = f"Decoder{fold}.pt"
+            glob_name = f"Global{fold}.pt"
+
+            save_model_to_path(args, encoder, decoder, global_feature_extractor,encoder_name,decoder_name,glob_name)
             del eval_loss
             torch.cuda.empty_cache()
-
-        scores,_ = eval(test_dl,encoder,attention,decoder, DEVICE, args["batch_size"],criterion,vocab_size,eval = False)
+               
+        scores,_ = eval(test_dl,encoder,global_feature_extractor,decoder, DEVICE, args["batch_size"],criterion,vocab_size,eval = False)
 
         test_output = {
                 'bleu1_mean':scores['Bleu1'][0],
