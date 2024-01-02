@@ -54,3 +54,18 @@ specifically cell detection. This is done using the histocartography package. Ge
 
 
 3. **Hierarchical Graph**
+
+
+
+## Data Loader Strategy
+
+
+## Model Architecture
+
+
+## Evaluation Metrics
+
+
+
+
+
