@@ -27,7 +27,7 @@ from argparse import ArgumentParser
 from models.Attention import EncoderLayer
 from Vocabulary import Vocabulary
 from models.Graph_Model import GNNEncoder
-from models.LSTM import LSTMDecoder
+from main.models.Transformer import LSTMDecoder
 from models.GlobalFeatureExtractor import GlobalFeatureExtractor
 from models.Classifier import Classifier
 from models.Transformer import TransformerDecoder
@@ -121,26 +121,33 @@ def get_all_models(args,device):
     encoder_path = os.path.join(args["model_save_base_path"],args["load_encoder_name"])
     global_feat_path = os.path.join(args["model_save_base_path"],args["load_global_extractor_name"])
 
-    if os.path.exists(encoder_path):
-        # load
-        print(f"exists")
-        encoder = torch.load(encoder_path).to(device)
-        pass
-    else:
-        raise Exception(f"Encoder path {encoder_path} not exist")
-    
-    if os.path.exists(global_feat_path):
-        # load
-        global_feat_extractor = torch.load(global_feat_path).to(device)
-        pass
-    else:
-        raise Exception(f"Encoder path {encoder_path} not exist")
-
-    # if os.path.exist(decoder_path):
+    # if os.path.exists(encoder_path):
     #     # load
-    #     decoder = torch.load(torch.load(decoder_path)).to(device)
+    #     print(f"exists")
+    #     encoder = torch.load(encoder_path).to(device)
+    #     pass
     # else:
-    #     raise Exception(f"Encoder path {decoder_path} not exist")
+    #     raise Exception(f"Encoder path {encoder_path} not exist")
+    encoder = GNNEncoder(
+        args = args,
+        cg_layer = args['gnn_param']['cell_layers'], 
+        tg_layer = args['gnn_param']['tissue_layers'],
+        aggregate_method = args['gnn_param']['aggregate_method'], 
+        input_feat = 514,
+        hidden_size = args['gnn_param']['hidden_size'],
+        output_size = args['gnn_param']['output_size'],
+    ).to(device)
+    # if os.path.exists(global_feat_path):
+    #     # load
+    #     global_feat_extractor = torch.load(global_feat_path).to(device)
+    #     pass
+    # else:
+    #     raise Exception(f"Encoder path {encoder_path} not exist")
+
+    global_feat_extractor = GlobalFeatureExtractor(
+        hidden_size = args["global_class_param"]["hidden_size"],
+        output_size = args["global_class_param"]["output_size"],
+        dropout_rate = args["global_class_param"]["dropout_rate"]).to(device)
 
     graph_output_size=  encoder.output_size
     global_output_size = global_feat_extractor.output_size
@@ -200,7 +207,8 @@ def eval(eval_loader, encoder,global_feature_extractor, classifier, device, crit
         with torch.no_grad():
             out = encoder(cg,tg,assign_mat,images)
             global_feat = global_feature_extractor(images)
-            merged_feat = torch.cat((out, global_feat), dim=1)
+            #merged_feat = torch.cat((out, global_feat), dim=1)
+            merged_feat = global_feat
             pred_matrix = classifier(merged_feat)
             pred_matrix = pred_matrix.to(device)
             #print(f"EVAL pred matrix {pred_matrix.shape} labels shape {labels.shape}")
@@ -303,7 +311,7 @@ def train_classifier():
         load_in_ram = True
     )
 
-    train_dl = get_sample_samplier(train_dataset,args["batch_size"])
+    # train_dl = get_sample_samplier(train_dataset,args["batch_size"])
     
 
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
@@ -358,7 +366,8 @@ def train_classifier():
             out = encoder(cg,tg,assign_mat,images) # (batch_size, 1, embedding)
             global_feat = global_feature_extractor(images)
 
-            merged_feat = torch.cat((out, global_feat), dim=1).unsqueeze(1)
+            #merged_feat = torch.cat((out, global_feat), dim=1).unsqueeze(1)
+            merged_feat = global_feat
             pred_matrix = classifier(merged_feat).to(device)
 
             '''

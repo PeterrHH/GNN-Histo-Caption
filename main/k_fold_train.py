@@ -29,7 +29,7 @@ from argparse import ArgumentParser
 from models.Attention import EncoderLayer
 from Vocabulary import Vocabulary
 from models.Graph_Model import GNNEncoder
-from models.LSTM import LSTMDecoder
+from main.models.Transformer import LSTMDecoder
 from models.GlobalFeatureExtractor import GlobalFeatureExtractor
 from models.Classifier import Classifier
 from models.Transformer import TransformerDecoder

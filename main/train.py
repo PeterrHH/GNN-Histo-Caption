@@ -12,6 +12,7 @@ import pickle
 from tqdm import tqdm
 import math
 from sklearn.metrics import f1_score, accuracy_score
+from torch.optim.lr_scheduler import StepLR
 
 import yaml
 import sys
@@ -27,12 +28,15 @@ from argparse import ArgumentParser
 from models.Attention import EncoderLayer
 from Vocabulary import Vocabulary
 from models.Graph_Model import GNNEncoder
-from models.LSTM import LSTMDecoder
+#from models.LSTM import LSTMDecoder, Beam_LSTMDecoder
+from models.LSTM2 import LSTMDecoder
 from models.GlobalFeatureExtractor import GlobalFeatureExtractor
 from models.Classifier import Classifier
-from models.Transformer import TransformerDecoder
+from models.Transformer import TransCapDecoder
 from data_plotting import violin_plot
 from torch.utils.data import WeightedRandomSampler
+
+import sent_utils
 
 
 import sys
@@ -48,7 +52,7 @@ from preprocessing import (
     AssignmnentMatrixBuilder         # assignment matrix 
 )
 
-print("OK")
+MAX_LEN = 80
 
 ''' 
 Update relevant arguments
@@ -106,48 +110,7 @@ def argparser():
 '''
 For a batch
 '''
-def embed2sentence(decode_output, loader, captions, pred_dict, cap_dict):
-    # print(f"Decode output is {decode_output}")
-   # print(f"Decode_output is {decode_output.shape}")
-    #print(f"Captions here is {len(captions)}")
-    # max_indices = torch.argmax(decode_output, dim=2) 
 
-
-    # print(f"---embed2sentence")
-    # print(decode_output[0])
-    # print(captions[0])
-    
-
-    for i,caption in enumerate(captions):
-        for sent_i,sent_cap in enumerate(caption):
-            captions[i][sent_i] = ' '.join(sent_cap.split()).replace("<pad>", "").replace("<end>", ".").replace("<start>","").replace('<unk>',"")
-            
-    j = 0
-    for idx,embed in enumerate(decode_output):
-
-        sentence = " ".join([loader.dataset.vocab.idx2word[int(idx)] for idx in embed])
-        sentence = sentence.replace("<pad>","").replace("<start>","")
-        sentence = ' '.join(sentence.split()).replace("<end>", ".")
-        #print(f"length pred_dict {len(pred_dict.keys())} and length cap {len(cap_dict.keys())}")
-        if len(pred_dict.keys()) == 0:
-            #   Empty
-            pred_dict["1"] = [sentence]
-            # for i in range(5):
-            #     cap_dict[str(int(i)+1)] = captions[idx]
-            cap_dict["1"] = captions[idx]
-            print(f"-------Prediction------")
-            print(pred_dict)
-            print(f"---------cap dict-------")
-            print(cap_dict)
-            pass
-        else:
-            pred_dict[str(len(pred_dict)+1)] = [sentence]
-            cap_dict[str(len(cap_dict)+1)] = captions[idx]
-    
-   # print(f"length pred {len(pred_dict)} and leng cap {len(cap_dict)}")
-    # print(f"E----cap dict-------")
-    # print(cap_dict)
-    return pred_dict,cap_dict
 
 def calc_acc_f1(gt_label,pred_matrix,batch_size,device):
     pred_label = torch.argmax(pred_matrix, dim=1)
@@ -160,16 +123,22 @@ def calc_acc_f1(gt_label,pred_matrix,batch_size,device):
     f1 = f1_score(gt_label.cpu().numpy(), pred_label.cpu().numpy(), average='weighted') 
     return accuracy, f1
 
+def get_clip_inference(model,cg,tg,assign_mat,images,trainable = True):
+    graph_out = model.graph_encoder(cg,tg,assign_mat,images)
+    global_feat = model.feature_extractor(images)
+    merged_feat = torch.cat((graph_out, global_feat), dim=1)
+    image_embeddings = model.image_projection(merged_feat)
 
-def eval(eval_loader,
+    return image_embeddings
+
+def eval(eval_loader,if_encoding,image_encoding,
          encoder,attention,decoder, global_feature_extractor, classifier,
          device,
-         criterion, vocab_size, labels,eval = True) :
+         caption_criterion,class_criterion, vocab_size, labels,eval = True) :
     batch_size = eval_loader.batch_size
     total_samples = len(eval_loader.dataset)
     total_step = math.ceil(total_samples / batch_size)
-    pred_dict = {}
-    cap_dict = {}
+
     test_output = {
         "Bleu1":[],
         "Bleu2":[],
@@ -180,51 +149,74 @@ def eval(eval_loader,
         "CIDEr":[],
         # "SPICE":[]
     }
-    #print(f"total sample is {total_samples} total step is {total_step} batch_size is {batch_size}")
-    #print(f"TOTAL STEP is {total_step}")
+    caption_loss = []
+    sent_lbl_loss = []
+    label_loss = []
+
     for step in tqdm(range(total_step)):
-        cg, tg, assign_mat, caption_tokens, labels, captions, images = next(iter(eval_loader))
-        # caption_dict = {str(i + 1): value for i, value in enumerate(captions)}
-        # print(f"Length of labels {labels.shape}")
+        pred_dict = {}
+        cap_dict = {}
+        cg, tg, assign_mat, caption_tokens, labels, captions, images,attention_masks,gt_lab = next(iter(eval_loader))
         cg = cg.to( device)
         tg = tg.to(device)
         images =  images.to(device)
         labels = labels.to(device)
         # encoder , decoder, attention = encoder.to(device) , decoder.to(device), attention.to(device)
         caption_tokens = caption_tokens.to(device)
+        attention_masks = attention_masks.to(device)
         with torch.no_grad():
-            out = encoder(cg,tg,assign_mat,images)
-            global_feat = global_feature_extractor(images)
-            merged_feat = torch.cat((out, global_feat), dim=1)
-            #merged_feat = out
-            lstm_out, lstm_out_tensor = decoder.predict(merged_feat,90)
+            if if_encoding:
+                merged_feat = get_clip_inference(image_encoding,cg,tg,assign_mat,images)
+                # merged_feat = image_encoding(cg,tg,assign_mat,images,caption_tokens,attention_masks)
+            else:
+                out = encoder(cg,tg,assign_mat,images)
+                global_feat = global_feature_extractor(images)
+                merged_feat = torch.cat((out, global_feat), dim=1)
+                #merged_feat = global_feat
+            lstm_out, lstm_out_tensor = decoder.predict(merged_feat,MAX_LEN)
+            #lstm_out_tensor = decoder.predict(merged_feat,caption_tokens,attention_masks)
+            # print(f"lstm out ten shape {lstm_out_tensor.shape}")
+            # _,lstm_out = torch.max(lstm_out_tensor,dim = 2)
+            # print(f"lstm out shape {lstm_out.shape}")
             pred_matrix = classifier(merged_feat)
             pred_matrix = pred_matrix.to(device)
+            
         #   Evaluate
         if eval:
-            print(f"In eval lstm_out {lstm_out.shape} and cap token is {caption_tokens.shape}")
-           # print(f"lstm view shape {lstm_out_tensor.view(-1, vocab_size).shape} and cap view {caption_tokens.view(-1).shape}")
-            #eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )        
             all_eval_loss = []
+            all_class_loss = []
             for cap_idx in range(caption_tokens.size(1)):
-                eval_cap_loss = criterion(lstm_out_tensor.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1))
-                # eval_label_loss = criterion(pred_matrix,labels)
-                # eval_loss = eval_cap_loss+ 0.5*eval_label_loss
-                #eval_loss = eval_label_loss
-                all_eval_loss.append(eval_cap_loss)
-            eval_loss = sum(all_eval_loss) / len(all_eval_loss)
+                #print(f"lsmt out ten {lstm_out_tensor.shape} cap tok cap_idx {caption_tokens[:,cap_idx,:].shape}")
+                eval_cap_loss = caption_criterion(lstm_out_tensor.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1))
+
+                eval_class_loss = class_criterion(pred_matrix,labels)
+                all_eval_loss.append(eval_cap_loss.item())
+                all_class_loss.append(eval_class_loss.item())
+            # caption_loss = caption_criterion(lstm_out_tensor.contiguous().view(-1, vocab_size),caption_tokens.reshape(-1))
+            # label_loss = class_criterion(pred_matrix,labels)
+            #caption_loss.append(eval_cap_loss.item())
+            # eval_loss = sum(all_eval_loss) / len(all_eval_loss)
+            eval_loss = np.mean(all_eval_loss)
+            caption_loss.append(eval_loss.item())
+            eval_label_loss = np.mean(all_class_loss)
+            label_loss.append(eval_label_loss.item())
+
         else:
             eval_loss = None
-        print(f"IN EVAL !!!!")
+            eval_label_loss = None
     
         accuracy,f1_score = calc_acc_f1(labels,pred_matrix,batch_size,device)
-        #eval_loss = criterion(lstm_out_tensor.view(-1, vocab_size) , caption_tokens.view(-1) )
-        pred_dict,cap_dict = embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict)
-        # print(f"-------cap_dict-------")
-        # print(cap_dict)
-        # print(f'-----pred_dict------')
-        # print(pred_dict)
-        print(f"cap dict len{len(cap_dict)} pred dict {len(pred_dict)}")
+        #print(f"lstm out shape in eval{lstm_out.shape}")
+        pred_dict,cap_dict = sent_utils.embed2sentence(lstm_out,eval_loader,captions,pred_dict,cap_dict,"eval")
+
+        '''
+        pred_lab = sent_utils.get_all_pred_label(pred_dict,sent_utils.key_words_name,sent_utils.key_words)
+        #print(f"pred lab in eval {pred_lab.shape}")
+        single_sent_lbl_loss = sent_utils.get_batch_sent_label_loss(pred_lab,gt_lab,sent_utils.key_words,sent_utils.key_word_weights,"eval")
+        sent_lbl_loss.append(single_sent_lbl_loss.item())
+        '''
+        # eval_loss += sent_lbl_loss
+        #print(f"cap dict len{len(cap_dict)} pred dict {len(pred_dict)}")
         scorer = Scorer(cap_dict,pred_dict)
         # if eval:
         scores = scorer.compute_scores()
@@ -235,7 +227,14 @@ def eval(eval_loader,
     if eval:
         # compute only mean
         test_output = {key: value[0] for key, value in scores.items()}
-    
+        eval_sent_loss = np.mean(caption_loss)
+        # eval_sent_loss = caption_loss
+
+        #eval_sent_lbl_loss = np.mean(sent_lbl_loss)
+        eval_sent_lbl_loss = 0
+        eval_loss = eval_sent_loss+ 0*eval_sent_lbl_loss
+        # eval_label_loss = label_loss
+        eval_label_loss = np.mean(label_loss)
     else:
         # compute mean and std
         print(f"------the scores in test: below ---------")
@@ -259,7 +258,8 @@ def eval(eval_loader,
             test_output[key] = [mean_value,std_value] # Store the mean in the new dictionary
         print(f"In test")
         print(test_output)
-    return test_output,eval_loss,accuracy,f1_score
+
+    return test_output,eval_loss,eval_label_loss,accuracy,f1_score,eval_sent_loss,eval_sent_lbl_loss
 
 def save_model_to_path(args,encoder,decoder,global_feature_extractor,best_eval_loss,best_epoch):
     base_save_path = args["model_save_base_path"]
@@ -307,12 +307,12 @@ def load_model(encoder_path, decoder_path,vocabs,args,device):
         output_size = 512
     )
     '''
-    
+    decoder embed size 
     '''
     decoder = LSTMDecoder(
         vocab_size = vocabs, 
-        embed_size = 512, 
-        hidden_size = 512,  
+        embed_size = 256, 
+        hidden_size = 256,  
         batch_size= args["batch_size"], 
         bi_direction = args["lstm_param"]["bi_direction"],
         device = device,
@@ -378,42 +378,37 @@ def get_sample_samplier(dataset,batch_size):
 '''
 decoder transformer/LSTM
 '''
-def model_def(args,device,vocabs,decoder_type = "transformer"):
+def model_def(args,device,vocabs,decoder_type = "Transformer",image_embed_path = None):
     '''
     decoder: transformer/lstm
     '''
         #   Define Model, Loss and 
-    encoder = GNNEncoder(
-        args = args,
-        cg_layer = args['gnn_param']['cell_layers'], 
-        tg_layer = args['gnn_param']['tissue_layers'],
-        aggregate_method = args['gnn_param']['aggregate_method'], 
-        input_feat = 514,
-        hidden_size = args['gnn_param']['hidden_size'],
-        output_size = args['gnn_param']['output_size'],
-    ).to(device)
 
-    # attention = EncoderLayer(d_model = args['gnn_param']['output_size'], 
+
+    # attention = EncoderLayer(d_model = args['gnn_param']['output_size']+args['global_class_param']['output_size'], 
     #     nhead = 4, 
     #     dim_feedforward = 1024, 
     #     dropout = 0.2).to(device)
+    image_embed_model = None
+    encoder = None
+    global_feature_extractor = None
     attention = None
-    
     if decoder_type == "Transformer":
-        decoder =  TransformerDecoder(
+        decoder =  TransCapDecoder(
             vocabs = vocabs,
-            d_model =  args['gnn_param']['output_size']+args["global_class_param"]["output_size"],
+            embed_size =  args['gnn_param']['output_size']+args["global_class_param"]["output_size"],
             nhead = args['transformer_param']['n_head'], 
             num_layers = args['transformer_param']['num_layers'], 
-            dim_feedforward=args['transformer_param']['dim_feedforward'], 
+            dim_feedforward= args['transformer_param']['dim_feedforward'], 
             dropout= args['transformer_param']['dropout'],
             device = device,
         ).to(device)
     elif decoder_type == "LSTM":
         decoder = LSTMDecoder(
             vocabs = vocabs, 
+            #embed_size = args["global_class_param"]["output_size"], 
             embed_size = args['gnn_param']['output_size']+args["global_class_param"]["output_size"], 
-            # embed_size = args["global_class_param"]["output_size"], 
+            #embed_size = args['gnn_param']['output_size'], 
             hidden_size = args["lstm_param"]["size"],  
             batch_size= args["batch_size"], 
             bi_direction = args["lstm_param"]["bi_direction"],
@@ -432,10 +427,7 @@ def model_def(args,device,vocabs,decoder_type = "transformer"):
         dropout=0.1
     )
     '''
-    global_feature_extractor = GlobalFeatureExtractor(
-        hidden_size = args["global_class_param"]["hidden_size"],
-        output_size = args["global_class_param"]["output_size"],
-        dropout_rate = args["global_class_param"]["dropout_rate"]).to(device)
+
 
     classifier = Classifier(
         graph_output_size = args['gnn_param']['output_size'],
@@ -443,8 +435,31 @@ def model_def(args,device,vocabs,decoder_type = "transformer"):
         hidden_size = args["classifier_param"]["hidden_size"],
         num_class = args["classifier_param"]["num_class"],
         dropout_rate = args["classifier_param"]["dropout_rate"]).to(device)
-
-    return encoder, attention, decoder, global_feature_extractor, classifier 
+   
+    if image_embed_path is None:
+        encoder = GNNEncoder(
+            args = args,
+            cg_layer = args['gnn_param']['cell_layers'], 
+            tg_layer = args['gnn_param']['tissue_layers'],
+            aggregate_method = args['gnn_param']['aggregate_method'], 
+            input_feat = 514,
+            hidden_size = args['gnn_param']['hidden_size'],
+            output_size = args['gnn_param']['output_size'],
+        ).to(device)
+        global_feature_extractor = GlobalFeatureExtractor(
+            hidden_size = args["global_class_param"]["hidden_size"],
+            output_size = args["global_class_param"]["output_size"],
+            dropout_rate = args["global_class_param"]["dropout_rate"]).to(device)
+    else:
+        print(f"LOADING IMAGE EMBED")
+        image_embed_model = torch.load(image_embed_path, map_location=device)
+        
+        for name, param in image_embed_model.named_parameters():
+    #if 'fc' not in name:  # or any other condition based on layer names
+            param.requires_grad = args["trainable_embedding"]
+        trainable = any(param.requires_grad for param in image_embed_model.parameters())
+        print("Model is trainable:", trainable)
+    return image_embed_model, encoder , attention, decoder,  global_feature_extractor, classifier
 def main():
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     load_model = False
@@ -465,19 +480,7 @@ def main():
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    #   make the dl here
-    #   !!!!!!!!!!! Change it back to train
-    # train_eval_dl,_ = make_dataloader(
-    #     batch_size = args["batch_size"],
-    #     split = "train",
-    #     base_data_path = args["dataset_path"],
-    #     graph_path = args["graph_path"],
-    #     vocab_path = args["vocab_path"],
-    #     shuffle=True,
-    #     num_workers=0,
-    #     load_in_ram = True,
-    #     mode = "eval"
-    # )
+
     train_dl,train_dataset = make_dataloader(
         batch_size = args["batch_size"],
         split = "train",
@@ -488,7 +491,7 @@ def main():
         num_workers=0,
         load_in_ram = True
     )
-    # train_dl = get_sample_samplier(train_dataset,args["batch_size"])
+    #train_dl = get_sample_samplier(train_dataset,args["batch_size"])
     print(f"train loader size {len(train_dl)}")
 
     test_dl,_ = make_dataloader(
@@ -513,19 +516,39 @@ def main():
         load_in_ram = True
     )
 
-
-    encoder , attention, decoder,  global_feature_extractor, classifier = model_def(args,DEVICE,vocabs,decoder_type=args["decoder_type"])
-
-    criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
+    if args["load_embedding"]:
+        print(f"USING THE LOAD EMBEDDING")
+        image_encoding, encoder , attention, decoder,  global_feature_extractor, classifier = model_def(args,DEVICE,vocabs,decoder_type=args["decoder_type"],image_embed_path = args["embed_model_path"])
+        all_params = list(image_encoding.parameters()) + list(decoder.parameters())
+    else:
+        image_encoding, encoder , attention, decoder,  global_feature_extractor, classifier = model_def(args,DEVICE,vocabs,decoder_type=args["decoder_type"])
+        all_params = list(encoder.parameters()) + list(global_feature_extractor.parameters()) + list(decoder.parameters())
+        #all_params = list(decoder.parameters())
     all_params = list(encoder.parameters()) + list(global_feature_extractor.parameters()) + list(decoder.parameters())
+    #caption_criterion = nn.CrossEntropyLoss(ignore_index = vocabs.word2idx['<pad>']).cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss(ignore_index = vocabs.word2idx['<pad>'])
+    caption_criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
+    #sent_label_criterion = nn.CrossEntropyLoss(weight = sent_utils.key_word_weights,reduction = 'mean').cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
+    class_criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
+    
+    encoder_classifier_param = list(classifier.parameters())
     print(f"----------TOTAL NUMBER OF PARAMETERS: {len(all_params)}-------------")
     if args["optimizer_type"] == "Adam":
-        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
-        #classifier_optimizer = torch.optim.Adam(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
+        #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+        if args["decoder_type"] == "Transformer":
+            caption_optimizer = torch.optim.Adam([
+                {'params': list(encoder.parameters()) + list(global_feature_extractor.parameters()) , 'lr': 0.001},
+                {'params': list(decoder.parameters()), 'lr': args["learning_rate"]}
+            ])
+        else:
+            caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+            #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
+        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"],weight_decay=args["weight_decay"])
+        #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+        scheduler = StepLR(caption_optimizer, step_size=10, gamma=0.9)
+        classifier_optimizer = torch.optim.Adam(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
 
     elif args["optimizer_type"] == "SGD":
-        caption_optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"],weight_decay=args["weight_decay"])
-        #classifier_optimizer = torch.optim.SGD(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
+        caption_optimizer = torch.optim.SGD(params=all_params, lr=args["learning_rate"],weight_decay=args["weight_decay"],momentum = 0.9)
     if "new" in args["vocab_path"]:
         vocab_use = "new"
     else:
@@ -557,7 +580,7 @@ def main():
         batch_size = args["batch_size"]
         total_step = math.ceil(total_samples / batch_size)
         best_eval_loss = 10
-        patience = 8
+        patience = 10
         counter = 0
         best_encoder = None
         best_decoder = None
@@ -571,28 +594,35 @@ def main():
         for epoch in range(args["epochs"]):
 
             total_loss = []
+            total_class_loss = []
             # for batched_idx, batch_data in enumerate(tqdm(train_dl)):
             for step in range(total_step):
                 #if args["graph_model_type"] == "Hierarchical":
-                cg, tg, assign_mat, caption_tokens, labels, caption, images = next(iter(train_dl))
+                cg, tg, assign_mat, caption_tokens, labels, caption, images,attention_masks,gt_lab = next(iter(train_dl))
                 #print(f"caption tokens type{type(caption_tokens)} shape {caption_tokens.shape}")
+                # print(caption_tokens[0])
                 cg = cg.to(DEVICE)
                 tg = tg.to(DEVICE)
                 labels = labels.to(DEVICE)
                 images = images.to(DEVICE)
                 # assign_mat = assign_mat.to(DEVICE)
+                attention_masks = attention_masks.to(DEVICE)
                 caption_tokens = caption_tokens.to(DEVICE) # (batch_size, num_sentences, num_words_in_sentence) num_sentence = 6, num_words = 16
+                if args["load_embedding"]:
+                    merged_feat = get_clip_inference(image_encoding,cg,tg,assign_mat,images)
+                    #merged_feat = image_encoding(cg,tg,assign_mat,images,caption_tokens,attention_masks)
+                else:
+                    out = encoder(cg,tg,assign_mat,images) # (batch_size, 1, embedding)
+                    global_feat = global_feature_extractor(images)
+            
+                    
+                    merged_feat = torch.cat((out, global_feat), dim=1)
+                    #merged_feat = global_feat
 
-                out = encoder(cg,tg,assign_mat,images) # (batch_size, 1, embedding)
-                global_feat = global_feature_extractor(images)
-
-
-                merged_feat = torch.cat((out, global_feat), dim=1)
-                #merged_feat = out
-                '''
-                merged_feat = global_feat.unsqueeze(1)
-                '''
-                lstm_out = decoder(merged_feat,caption_tokens)
+                #print(f"merged_feat shape before decoder {merged_feat.shape} cap tok {caption_tokens.shape}")
+                print(f"------Caption token in Train--------")
+                print(caption_tokens[0,:])
+                lstm_out = decoder(merged_feat,caption_tokens,attention_masks)
                 pred_matrix = classifier(merged_feat)
                 pred_matrix = pred_matrix.to(DEVICE)
 
@@ -604,33 +634,57 @@ def main():
                     all_loss.append(criterion(lstm_out.view(-1, vocab_size),caption_tokens[:,cap_idx,:].reshape(-1)))
                 loss = sum(all_loss) / len(all_loss)
                 '''
-                caption_loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
-                #print(f"pred matrix {pred_matrix.shape} labels {labels.shape}")
-                #label_loss = criterion(pred_matrix,labels)
+                pred_dict = {}
+                cap_dict = {}
+                #pred_dict,cap_dict = sent_utils.embed2sentence(lstm_out,train_dl,caption,pred_dict,cap_dict,"train")
+                #pred_lab = sent_utils.get_all_pred_label(pred_dict,sent_utils.key_words_name,sent_utils.key_words)
+                # print(f"lsmt out shape {lstm_out.shape} cap tok shape {caption_tokens.shape}")
+                # print(f"vocab size is {vocab_size}")
+                # print(f"lstm reshape {lstm_out.contiguous().view(-1, vocab_size).shape}")
+                # print(f"cap tok reshape {caption_tokens.view(-1).shape}")
+                # print(f"lstm_out 50: {lstm_out.shape}")
+                # print(f"caption_tok: {caption_tokens.shape}")
+                # print(lstm_out.contiguous().view(-1, vocab_size)[])
+                # print("!!!!!!!!!!!!!!!!!!!")
+                caption_loss = caption_criterion(lstm_out.view(-1, vocab_size) , caption_tokens.view(-1) )
+                # print(f"LOSS is {caption_loss}")
+                # print(f"----------")
+                #sent_lbl_loss = sent_utils.get_batch_sent_label_loss(pred_lab,gt_lab,sent_utils.key_words,sent_utils.key_word_weights,"train")
+                sent_lbl_loss = 0
+                final_loss = caption_loss 
+                # final_loss = sent_lbl_loss
+                label_loss = class_criterion(pred_matrix,labels)
                 # loss = caption_loss + 0.5*label_loss
                 #loss = label_loss
                 caption_optimizer.zero_grad()
-                #loss = criterion(lstm_out.view(-1, vocab_size) , caption_tokens)
+                classifier_optimizer.zero_grad()
+
                 caption_loss.backward(retain_graph=True)
-                #label_loss.backward()
+                
+                label_loss.backward()
                 nn.utils.clip_grad_norm_(all_params, 1.0)
                 caption_optimizer.step()
 
-                #classifier_optimizer.step()
-                total_loss.append(caption_loss.item())
-
+                classifier_optimizer.step()
+                # total_loss.append(caption_loss.item())
+                total_loss.append(final_loss.item())
+                total_class_loss.append(label_loss.item())
+            scheduler.step()
             mean_loss = np.mean(total_loss)
-
+            mean_label_loss = np.mean(total_class_loss)
             del total_loss
-            print(f"Training mean loss as {mean_loss} in epoch {epoch}")
-
-            scores,eval_loss,accuracy,f1_score = eval(eval_dl,
-                                                      encoder,
-                                                      attention,
-                                                      decoder,
-                                                      global_feature_extractor,
-                                                      classifier,
-                                                      DEVICE, criterion,vocab_size,labels)
+            #print(f"Training caption mean loss as {mean_loss} and label loss {mean_label_loss} in epoch {epoch}")
+            encoder.eval()
+            decoder.eval()
+            global_feature_extractor.eval()
+            scores,eval_loss,eval_class_loss,accuracy,f1_score,cap_loss,sent_lbl_loss = eval(eval_dl,if_encoding = args["load_embedding"],image_encoding = image_encoding,
+                                                      encoder = encoder,
+                                                      attention = attention,
+                                                      decoder = decoder,
+                                                      global_feature_extractor = global_feature_extractor,
+                                                      classifier = classifier,
+                                                      device = DEVICE, caption_criterion = caption_criterion,
+                                                      class_criterion = class_criterion,vocab_size = vocab_size,labels = labels)
             
             current_loss = eval_loss.item()
             current_encoder = encoder
@@ -641,6 +695,8 @@ def main():
             eval_output = {
                 'train_cap_loss':mean_loss,
                 'eval_cap_loss':eval_loss,
+                'train_class_loss':mean_label_loss,
+                'eval_class_loss':eval_class_loss,
                 'bleu1':scores['Bleu1'],
                 'bleu4':scores['Bleu4'],
                 'meteor':scores['METEOR'],
@@ -649,8 +705,22 @@ def main():
                 #'spice':scores['SPICE'],
                 'accuracy':accuracy,
                 'f1_score':f1_score,
+                # 'cap_loss':cap_loss,
+                # 'sent_lbl_loss':sent_lbl_loss,
             }
+            encoder.train()
+            decoder.train()
+            global_feature_extractor.train()
             wandb.log(eval_output)
+            if args["save_model"] is True:
+                if args["decoder_type"] == "Transformer" :
+                    if epoch % 5 == 0:
+                        save_model_to_path(args,encoder,decoder,global_feature_extractor,eval_loss.item(),epoch)
+                        torch.cuda.empty_cache()
+                else:
+                    if epoch >= 50 and epoch % 5 == 0:
+                            save_model_to_path(args,encoder,decoder,global_feature_extractor,eval_loss.item(),epoch)
+                            torch.cuda.empty_cache()
             if eval_loss.item() < best_eval_loss:
                 best_eval_loss = eval_loss.item()
                 best_epoch = epoch
@@ -660,10 +730,11 @@ def main():
                 best_feature_extractor = global_feature_extractor
             else:
                 counter += 1
-                if counter >= patience and epoch > 20:
-                    save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
-                    torch.cuda.empty_cache()
-                    break
+                #   Do early stopping a bit later
+                if counter >= 5 and epoch > 100:
+                        save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
+                        torch.cuda.empty_cache()
+                        break
                 # save_model_to_path(args,current_encoder,current_decoder,current_feature_extractor,current_loss,args["epochs"]-1)
 
 
@@ -676,33 +747,43 @@ def main():
         #     print(f"eval list item is {best_eval_loss}")
         #     save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
         #     save_model_to_path(args,current_encoder,current_decoder,current_feature_extractor,current_loss,args["epochs"]-1)
-        # train_scores, train_loss, train_accuracy, train_f1_score = eval(train_eval_dl,
-        #                                             encoder,
-        #                                             attention,
-        #                                             decoder,
-        #                                             global_feature_extractor,
-        #                                             classifier,
-        #                                             DEVICE,criterion,vocab_size,labels)
-        # print(f"train loss is {train_loss} for epoch {epoch}")
+        # # train_scores, train_loss, train_accuracy, train_f1_score = eval(train_eval_dl,
+        # #                                             encoder,
+        # #                                             attention,
+        # #                                             decoder,
+        # #                                             global_feature_extractor,
+        # #                                             classifier,
+        # #                                             DEVICE,criterion,vocab_size,labels)
+        # # print(f"train loss is {train_loss} for epoch {epoch}")
 
         # if args["save_model"]:
         #     print(f"eval list item is {best_eval_loss}")
         #     save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
+        '''
+
+        scores,eval_loss,eval_class_loss,accuracy,f1_score = eval(eval_dl,if_encoding = args["load_embedding"],image_encoding = image_encoding,
+                                                    encoder = encoder,
+                                                    attention = attention,
+                                                    decoder = decoder,
+                                                    global_feature_extractor = global_feature_extractor,
+                                                    classifier = classifier,
+                                                    device = DEVICE, caption_criterion = caption_criterion,
+                                                    class_criterion = class_criterion,vocab_size = vocab_size,labels = labels)
+        '''
         
-        scores,_,accuracy,f1_score = eval(test_dl,encoder,attention,decoder, 
-                                            global_feature_extractor,classifier,DEVICE,criterion,vocab_size,labels,eval = False)
-        # train_eval_output = {
-        #     'train_bleu1':train_scores['Bleu1'],
-        #     'train_bleu4':train_scores['Bleu4'],
-        #     'train_meteor':train_scores['METEOR'],
-        #     'train_rouge':train_scores['ROUGE_L'],
-        #     'train_cider':train_scores['CIDEr'],
-        #     #'spice':scores['SPICE'],
-        #     'train_accuracy':train_accuracy,
-        #     'train_f1_score':train_f1_score,
-        # }
-        # print("Training Set as eval mode")
-        # print(train_eval_output)
+        # scores,_,_,accuracy,f1_score = eval(test_dl,best_encoder,attention,best_decoder, 
+        #                                     best_feature_extractor,classifier,DEVICE,caption_criterion,class_criterion,vocab_size,labels,eval = False)
+        scores,eval_loss,eval_class_loss,accuracy,f1_score,_,_ = eval(
+                                                    eval_loader = test_dl,
+                                                    if_encoding = args["load_embedding"],
+                                                    image_encoding = image_encoding,
+                                                    encoder = best_encoder,
+                                                    attention = None,
+                                                    decoder = best_decoder,
+                                                    global_feature_extractor = best_feature_extractor,
+                                                    classifier = classifier,
+                                                    device = DEVICE, caption_criterion = caption_criterion,
+                                                    class_criterion = class_criterion,vocab_size = vocab_size,labels = labels,eval = False)
         test_output = {
                 'bleu1_mean':scores['Bleu1'][0],
                 'bleu1_std':scores['Bleu1'][1],
@@ -723,7 +804,7 @@ def main():
                 'accuracy':accuracy,
                 'f1_score':f1_score,
             }
-        print("Testing data output: ")
+        print(f"Testing data output for the best epoch at {best_epoch}.")
         print(test_output)
 
 

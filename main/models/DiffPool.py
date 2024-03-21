@@ -11,10 +11,45 @@ from torch.nn import functional as F
 from torch_geometric.nn import DenseSAGEConv, dense_diff_pool
 from torch_geometric.utils import to_dense_batch, to_dense_adj
 from torch_geometric.nn import DenseGraphConv
-from utils import fetch_assign_matrix, GCNConv
+from torch_geometric.nn import MessagePassing
+# from utils import fetch_assign_matrix, GCNConv
 
 NUM_SAGE_LAYERS = 3
 
+def fetch_assign_matrix(random, dim1, dim2, normalize=False):
+    if random == 'uniform':
+        m = torch.rand(dim1, dim2)
+    elif random == 'normal':
+        m = torch.randn(dim1, dim2)
+    elif random == 'bernoulli':
+        m = torch.bernoulli(0.3*torch.ones(dim1, dim2))
+    elif random == 'categorical':
+        idxs = torch.multinomial((1.0/dim2)*torch.ones((dim1, dim2)), 1)
+        m = torch.zeros(dim1, dim2)
+        m[torch.arange(dim1), idxs.view(-1)] = 1.0
+
+    if normalize:
+        m = m / (m.sum(dim=1, keepdim=True) + EPS)
+    return m
+
+# class GCNConv(MessagePassing):
+#     def __init__(self, emb_dim, aggr):
+#         super(GCNConv, self).__init__(aggr=aggr)
+
+#         self.linear = torch.nn.Linear(emb_dim, emb_dim)
+#         self.root_emb = torch.nn.Embedding(1, emb_dim)
+#         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
+
+#     def forward(self, x, edge_index, edge_attr):
+#         x = self.linear(x)
+#         edge_embedding = self.bond_encoder(edge_attr)
+#         return self.propagate(edge_index, x=x, edge_attr=edge_embedding) + F.relu(x + self.root_emb.weight)
+
+#     def message(self, x_j, edge_attr):
+#         return F.relu(x_j + edge_attr)
+
+#     def update(self, aggr_out):
+#         return aggr_out
 
 class SAGEConvolutions(nn.Module):
     def __init__(self,
@@ -45,12 +80,13 @@ class SAGEConvolutions(nn.Module):
         return x
 
     def forward(self, x, adj, mask=None):
+        print(f"x shape {x.shape}")
         batch_size, num_nodes, in_channels = x.size()
 
         x0 = x
-        x1 = self.bn(1, F.relu(self.conv1(x0, adj, mask, add_loop=False)))
-        x2 = self.bn(2, F.relu(self.conv2(x1, adj, mask, add_loop=False)))
-        x3 = self.conv3(x2, adj, mask, add_loop=False)
+        x1 = self.bn(1, F.relu(self.conv1(x0, adj, mask)))
+        x2 = self.bn(2, F.relu(self.conv2(x1, adj, mask)))
+        x3 = self.conv3(x2, adj, mask)
 
         x = torch.cat([x1, x2, x3], dim=-1)
 
@@ -95,3 +131,6 @@ class DiffPoolLayer(nn.Module):
 
         x, adj, l, e = dense_diff_pool(x, adj, s, mask)
         return x, adj, l, e
+
+if __name__ == "__main__":
+    pass

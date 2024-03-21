@@ -9,7 +9,7 @@ import torch.nn as nn
 
 #
 from .Graph_Model import GNNEncoder
-from .LSTM import LSTMDecoder
+from .Transformer import LSTMDecoder
 
 
 

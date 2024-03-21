@@ -10,7 +10,10 @@ class Classifier(nn.Module):
         super().__init__()
 
         #Set input size base on specific use case
+        #self.input_size = graph_output_size
         self.input_size = graph_output_size + global_output_size
+        print(f"in classifier input size {self.input_size}")
+        #self.input_size = 256
         '''
         self.input_size = global_output_size
         '''

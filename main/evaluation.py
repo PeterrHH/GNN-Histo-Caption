@@ -93,6 +93,7 @@ class Scorer():
                 #print(curr_gt)
                 score, _ = scorer.compute_score(curr_ref, curr_gt)
                 # print(score)
+                print(f"computing scorer {scorer}")
                 if type(method) == list:
                     # for sc, scs, m in zip(score, scores, method):
                         # print("----------Bleu----------")
@@ -124,26 +125,32 @@ if __name__ == '__main__':
         cider = scores["CIDEr"]
         #spice = scores["SPICE"]
         return bleu[0], bleu[1], bleu[2], bleu[3], meteor, rouge, cider
-    ref_dict = {
-        '1': ['Walk down the steps and stop at the bottom. ', 'Go down the stairs and wait at the bottom.','Once at the top of the stairway, walk down the spiral staircase all the way to the bottom floor. Once you have left the stairs you are in a foyer and that indicates you are at your destination.'],
-        '2': ['It is a cat.','It is a cat.','cat over there.'],
-        '3': ['i know it, you know it','I do now know what this mean','THis is good']
-    }
+    # ref_dict = {
+    #     '1': ['Walk down the steps and stop at the bottom. ', 'Go down the stairs and wait at the bottom.','Once at the top of the stairway, walk down the spiral staircase all the way to the bottom floor. Once you have left the stairs you are in a foyer and that indicates you are at your destination.'],
+    #     '2': ['It is a cat.','It is a cat.','cat over there.'],
+    #     '3': ['i know it, you know it','I do now know what this mean','THis is good']
+    # }
 
-    gen_dict = {
-        '1': ['go down the stairs all the way and stop at the bottom .'],
-        '2': ['It is a cat.'],
-        '3': ['I know how good this is']
-    }
+    # gen_dict = {
+    #     '1': ['go down the stairs all the way and stop at the bottom .'],
+    #     '2': ['It is a cat.'],
+    #     '3': ['I know how good this is']
+    # }
 
     ref = {
-           '1':['Slight variability in nuclear size shape and outline consistent with mild pleomorphism . There is a severe degree of crowding . Polarity is completely lost . Mitosis is frequent throughout the tissue . Prominent nucleoli are easily identified in low magnification scanning . High grade .',
-                'Mild pleomorphism is present . There is a severe degree of crowding . Architecturally the cells show complete lack of polarity toward the surface urothelium . Mitosis is frequent throughout the tissue . The nucleoli of nuclei are prominent . High grade .', 
-                'Mild pleomorphism is present . Nuclei are severely crowded together . There is marked disorganization and lack of cellular polarity toward the surface urothelium . Mitosis is frequent . Nucleoli is prominent . High grade .', 
-                'Mild pleomorphism and cytologic atypia is present . The nuclei are crowded to a severe degree . Polarity is completely lost . There are frequent mitotic figures throughout the tissue . The nucleoli of nuclei are prominent . High grade .', 
-                'Nuclear features show mild pleomorphism . There is a severe degree of crowding . Architecturally the cells show complete lack of polarity toward the surface urothelium . Mitotic figures including the atypical forms are frequently seen in all levels of the urothelium . Nucleoli is prominent . High grade .']}
+           '1':['mild pleomorphism and cytologic atypia is present. the nuclei are crowded to a moderate degree. there is no full-thickness lack of polarity observed. Mitosis is rare throughout the tissue. the nucleoli are mostly inconspicuous. ', 
+                'nuclear features show mild pleomorphism. Moderate crowding of the nuclei can be seen. the urothelium shows some degree of loss of polarity. mitosis is rare. the nucleoli are mostly inconspicuous. ', 
+                'mild pleomorphism is present. Moderate crowding of the nuclei can be seen. there is no full-thickness lack of polarity observed. mitosis are exceedingly rare and limited only to the basal layer of urothelium. the nucleoli are mostly inconspicuous. ', 
+                'slight variability in nuclear size shape and outline consistent with mild pleomorphism. moderate nuclear crowding is seen. there is no full-thickness lack of polarity observed. mitosis appears to be rare. nucleoli is absent to inconspicuous. ', 
+                'slight variability in nuclear size shape and outline consistent with mild pleomorphism. the nuclei are crowded to a moderate degree. polarity is partially lost. mitosis appears to be rare. yhe nucleoli are mostly inconspicuous. '],
+            '2':['Insufficient information. insufficient information. insufficient information. insufficient information. the nucleoli of nuclei are prominent. ', 
+                 'Insufficient information. insufficient information. insufficient information. insufficient information. prominent nucleoli are easily identified in low magnification scanning. ', 
+                 'Insufficient information. insufficient information. insufficient information. insufficient information. the nucleoli of nuclei are prominent. ', 
+                 'Insufficient information. insufficient information. insufficient information. insufficient information. the nucleoli of nuclei are prominent. ', 
+                 'Insufficient information. insufficient information. insufficient information. insufficient information. the nucleoli of nuclei are prominent. ']}
     gen = {
-           '1':['mild pleomorphism . there are and prominent nucleoli are not observed or exceedingly rare and limited to .']}
+           '1':['nuclear nuclear features and and outline consistent with mild pleomorphism. there is a crowding. the nuclei are crowded to degree. polarity is rare. mitosis is rare. the nucleoli are prominent. '],
+           '2':['insufficient information. insufficient information . insufficient information. insufficient information. insufficient information.']}
     
 
 

@@ -16,6 +16,7 @@ from urllib.request import urlopen
 import ssl
 import json
 import dgl
+import wandb
 
 '''
 115971_003.bin
@@ -99,7 +100,7 @@ class GraphBuilding:
 
         # print("----------------BEFORE-------------")
         # print(graph)
-        graph = dgl.add_self_loop( graph )
+        #graph = dgl.add_self_loop( graph )
         # print("---------------AFTER---------------")
         # print(graph)
         return graph, nuclei_centroids
@@ -109,9 +110,23 @@ class GraphBuilding:
         features = self.tissue_feature_extractor.process(image, superpixels)
         graph = self.rag_graph_builder.process(superpixels, features)
         
-        graph = dgl.add_self_loop(graph) 
+        #graph = dgl.add_self_loop(graph) 
         return graph, superpixels
     
+    def check_build_dir(self,store_path,split):
+        # check cell_graphs, tissue_graphs,assignment_mat
+        cell_graph_path = os.path.join(store_path,"cell_graphs",split)
+        tissue_graph_path = os.path.join(store_path,"tissue_graphs",split)
+        assignment_mat_path = os.path.join(store_path,"assignment_mat",split)
+        if not os.path.exists(cell_graph_path):
+            print(f"Made directory for {cell_graph_path}")
+            os.mkdir(cell_graph_path)
+        if not os.path.exists(tissue_graph_path):
+            print(f"Made directory for {tissue_graph_path}")
+            os.mkdir(tissue_graph_path)
+        if not os.path.exists(assignment_mat_path):
+            print(f"Made directory for {assignment_mat_path}")
+            os.mkdir(assignment_mat_path)
     '''
     Images_folder: pass in where the image are stored in
     Store_path: Where to store the Graphs
@@ -120,14 +135,24 @@ class GraphBuilding:
     def build(self, images_folder, store_path, split):
         #   Get a list of image and store them
         folder = os.path.join(images_folder, split)
+
+   
+        #folder = os.path.join(images_folder, split)
+        # if not os.path.exists(folder):
+        #     os.makedirs(folder)
         images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
-        print(images_path)
+        print(f"folder {folder} there are {len(images_path)} image")
+        self.check_build_dir(store_path,split)
         for image_path in tqdm(images_path):
             _, image_name = os.path.split(image_path)
-            print(image_path)
+            # print(image_path)
             read_path = os.path.join(folder,image_path)
-            image = np.array(Image.open(read_path))
-            # print(f"Image has shape {image.shape}")
+            try:
+                image = np.array(Image.open(read_path))
+            except Exception as e:
+                print(f"for {read_path} Exception is {e}")
+                continue
+            # print(f"Image has shape {image.shape} ")
         #   Get the store path
             cg_out = os.path.join(store_path, 'cell_graphs', split, image_name.replace('.png', '.bin'))
             tg_out = os.path.join(store_path, 'tissue_graphs', split, image_name.replace('.png', '.bin'))
@@ -277,17 +302,21 @@ class GraphBuilding:
 if __name__ == "__main__":
     ssl._create_default_https_context = ssl._create_unverified_context # Use it to solve SSL 
     print(f"starting")
+    wandb.init(
+        project="GNN generation",
+        name = "No self Loop",
+        #   track hyperparameters and run metadata
+    )
     folder = "../../../../../../srv/scratch/bic/peter/Report/Images"
     target = "./target_img/target.png"
-    store_path = "../../../../../../srv/scratch/bic/peter/full-graph"
+    store_path = "../../../../../../srv/scratch/bic/peter/full-graph-raw"
     images_path = [file for file in os.listdir(folder) if file.endswith('.png')]
     GB = GraphBuilding(target)
     GB.build(folder,store_path,"test")
     GB.build(folder,store_path,"train")
+    print(f"Going to build eval !!!")
     GB.build(folder,store_path,"eval")
-    # ne = NucleiExtractor()
-    
-    # Graph are bin file, Assignment mat is h5 file
+
     import os
 #     file_path = "abc/edf.h5"
 #     file_name = os.path.basename(file_path)
@@ -295,14 +324,21 @@ if __name__ == "__main__":
 #     name_without_extension = os.path.splitext(os.path.basename(file_path))[0]
 
 #     print(name_without_extension)  
-    base = "graph"
+    base = store_path
+
     splits = ['train', 'test', 'eval']
     specifics = ['cell_graphs','tissue_graphs','assignment_mat']
     
     lowest_dict = {'train':None,
                   'test':None,
                   'eval':None}
-
+    '''
+    splits = ['train', 'test']
+    specifics = ['cell_graphs','tissue_graphs','assignment_mat']
+    
+    lowest_dict = {'train':None,
+                  'test':None}
+    '''
     for specific in specifics:
         for split in splits:
             folder = os.path.join(base,specific,split)
