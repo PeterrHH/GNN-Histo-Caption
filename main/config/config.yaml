@@ -5,11 +5,11 @@ encoder_path: "../../../../../../srv/scratch/bic/peter/encoder"
 decoder_path: "../../../../../../srv/scratch/bic/peter/decoder"
 output_path: "output"
 vocab_path: "new_vocab_bladderreport.pkl" # process_vocab_bladderreport.pkl
-learning_rate: 0.0015
+learning_rate: 0.001
 weight_decay: 0.001
 phase: train # train, test, eval
 epochs: 200
-decoder_type: "LSTM" # Transformer, LSTM
+decoder_type: "Transformer" # Transformer, LSTM
 train_mode: "train_mode"
 encoder: "GCN"
 graph_model_type: "Hierarchical" #  Hierarchical, Cell, Tissue
@@ -18,16 +18,16 @@ batch_size: 32
 eval_batch_size: "full"
 model_save_base_path: "../../../../../../srv/scratch/bic/peter/model_save"
 save_model: True
-save_encoder: "Encoder-54" # put encoder name
-save_decoder: "Decoder-54" # put decoder name 
-save_global_feature_extractor: "GlobalExtractor-54" # put feature extractor name
+save_encoder: "Encoder-56" # put encoder name
+save_decoder: "Decoder-56" # put decoder name 
+save_global_feature_extractor: "GlobalExtractor-56" # put feature extractor name
 save_classifier: "Classifier1" # 
 save_every: 2
 loss: label # Both, caption, label 
-wandb_name: "54 lr 0.001 LSTM 1 layer 256 hid scheduler"
-load_encoder_name : "Encoder-52-50-2.94.pt"
-load_global_extractor_name: "GlobalExtractor-52-50-2.94.pt"
-load_decoder: "Decoder-52-50-2.94.pt"
+wandb_name: "56 lr 0.001 Tran 1 layer 512 hid scheduler top K"
+load_encoder_name : "Encoder-54-59-2.64.pt"
+load_global_extractor_name: "GlobalExtractor-54-59-2.64.pt"
+load_decoder: "Decoder-54-59-2.64.pt"
 load_train: False
 classifier_name: "Normal Way to do it 8"
 load_embedding: False
@@ -42,8 +42,8 @@ gnn_param:
   tissue_conv_method: "GIN" # GCN, GAT, GraphSage, GIN, PNA
   pool_method: None # None, Diff, MinCut
   aggregate_method: "mean" # sum, mean, max
-  hidden_size: 256
-  output_size: 256
+  hidden_size: 512
+  output_size: 512
   GAT: 
     num_heads: 2
   GraphSage:
@@ -51,8 +51,8 @@ gnn_param:
   GIN:
 
 global_class_param:
-  hidden_size: 256
-  output_size: 256
+  hidden_size: 512
+  output_size: 512
   dropout_rate: 0.5
 
 classifier_param:

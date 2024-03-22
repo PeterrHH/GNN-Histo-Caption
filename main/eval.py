@@ -168,7 +168,7 @@ def test_caption(args,encoder_path,decoder_path, global_feature_extractor_path,
         mode = "eval"
     )
     test_dl,_ = make_dataloader(
-        batch_size =1000, # there are 1000 set 1 because we will calculate pair by pair
+        batch_size =args["batch_size"], # there are 1000 set 1 because we will calculate pair by pair
         split = "test",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],
@@ -179,7 +179,7 @@ def test_caption(args,encoder_path,decoder_path, global_feature_extractor_path,
     )
 
     eval_dl,_ = make_dataloader(
-        batch_size = 889, # there are 889 in eval set
+        batch_size =args["batch_size"], # there are 889 in eval set
         split = "eval",
         base_data_path = args["dataset_path"],
         graph_path = args["graph_path"],

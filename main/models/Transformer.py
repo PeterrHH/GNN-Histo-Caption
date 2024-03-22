@@ -11,7 +11,7 @@ class TransCapDecoder(nn.Module):
         self.embed_size = embed_size
         self.vocabs = vocabs
         self.vocab_size = len(self.vocabs)
-        self.max_seq_length = 70
+        self.max_seq_length = 80
         self.nhead = nhead
         self.num_layers = num_layers
         self.device = device

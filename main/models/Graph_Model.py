@@ -23,7 +23,7 @@ import torch.nn as nn
 Output: torch.Tensor([batch_size,feature_bedding_size])
 '''
 class GNNEncoder(nn.Module):
-    def __init__(self, args, cg_layer, tg_layer, aggregate_method, input_feat = 514,hidden_size=256,output_size = 128,num_classes = 3, pool_ratio = 0.8):
+    def __init__(self, args, cg_layer, tg_layer, aggregate_method, input_feat = 514,hidden_size=256,output_size = 128,num_classes = 3):
         super().__init__()
         self.conv_map = {
             "GCN": GraphConv,
@@ -56,8 +56,8 @@ class GNNEncoder(nn.Module):
         self.cg_to_tg_aggregate = None
         self.tg_readout_aggregate = None
         self.feature_extractor = torchvision.models.resnet34(pretrained=True)
-        #self.scoring_fn = ScoringFunction(feature_dim=self.hidden_feat).to(self.device)
-        #self.pool_ratio = pool_ratio
+        self.scoring_fn = ScoringFunction(feature_dim=self.hidden_feat)
+        self.pool_ratio = 0.8
 
         # self.weight_cell = nn.Parameter((1,1,self.hidden_feat),requires_grad = True)
         # self.weight_tissue = nn.Parameter((1,1,self.hidden_feat), requires_grad = True)
@@ -232,20 +232,21 @@ class GNNEncoder(nn.Module):
         '''
         Start Top K Once
         '''
-        #cell_graph = topk_pooling_individual(cell_feat, self.pool_ratio, self.scoring_fn)
+        cell_graph.ndata['feat'] = cell_feat
+        cell_graph = topk_pooling_individual(cell_graph, self.pool_ratio, self.scoring_fn)
 
 
         #print(f"cell graph feat after norm {cell_feat.shape}")
         for layer in self.cell_layer[1:]:
             cell_feat = layer[0](cell_graph, cell_feat)
-            #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+            cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
             cell_feat = layer[1](cell_feat)
-            #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+            cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
             cell_feat = self.dropout(cell_feat)
-            #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+            cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
 
         cell_feat = self.graph_norm(cell_feat)
-        # cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+        cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
 
 
         for layer in self.tissue_layer[1:]:
@@ -255,25 +256,26 @@ class GNNEncoder(nn.Module):
         tissue_feat = self.graph_norm(tissue_feat)
 
         cell_feat += self.compute_assigned_feats(cell_feat,cell_graph,assignment_mat,tissue_feat,tissue_graph)
-        # cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+        cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
         cell_feat = self.graph_norm(cell_feat)
         #print(f"cell graph feat after norm {cell_feat.shape}")
     
         '''
         Top K Second
         '''
-        #cell_graph = topk_pooling_individual(cell_graph, self.pool_ratio, self.scoring_fn)
+        cell_graph.ndata['feat'] = cell_feat
+        cell_graph = topk_pooling_individual(cell_graph, self.pool_ratio, self.scoring_fn)
 
         
         for layer in self.cell_layer[1:]:
             cell_feat = layer[0](cell_graph, cell_feat)
-            #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+            cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
             #print(f"Convolution {cell_feat.shape}")
             cell_feat = layer[1](cell_feat)
-            #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+            cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
             cell_feat = self.dropout(cell_feat)
         cell_feat = self.graph_norm(cell_feat)
-        #cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
+        cell_feat = cell_feat*cell_graph.ndata['mask'].unsqueeze(1).float()
         cell_feat = self.dropout(self.lin_out(cell_feat))
         cell_feat = self.readout(cell_graph,cell_feat)
         return cell_feat

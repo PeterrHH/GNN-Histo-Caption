@@ -536,15 +536,15 @@ def main():
         #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
         if args["decoder_type"] == "Transformer":
             caption_optimizer = torch.optim.Adam([
-                {'params': list(encoder.parameters()) + list(global_feature_extractor.parameters()) , 'lr': 0.001},
-                {'params': list(decoder.parameters()), 'lr': args["learning_rate"]}
+                {'params': list(encoder.parameters()) + list(global_feature_extractor.parameters()) , 'lr': 0.001,'weight_decay':0.001},
+                {'params': list(decoder.parameters()), 'lr': args["learning_rate"],'weight_decay':args["weight_decay"]}
             ])
         else:
-            caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
+            caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
             #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"], weight_decay=args["weight_decay"])
-        caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"],weight_decay=args["weight_decay"])
+        #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"],weight_decay=args["weight_decay"])
         #caption_optimizer = torch.optim.Adam(params = all_params, lr= args["learning_rate"])
-        scheduler = StepLR(caption_optimizer, step_size=10, gamma=0.9)
+        scheduler = StepLR(caption_optimizer, step_size=20, gamma=0.9)
         classifier_optimizer = torch.optim.Adam(params = encoder_classifier_param, lr = args["learning_rate"], weight_decay=args["weight_decay"])
 
     elif args["optimizer_type"] == "SGD":
@@ -731,7 +731,7 @@ def main():
             else:
                 counter += 1
                 #   Do early stopping a bit later
-                if counter >= 5 and epoch > 100:
+                if counter >= 10 and epoch > 140:
                         save_model_to_path(args,best_encoder,best_decoder,best_feature_extractor,best_eval_loss,best_epoch)
                         torch.cuda.empty_cache()
                         break
